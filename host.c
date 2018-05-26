@@ -134,30 +134,28 @@ void connectToOrigin(struct sockaddr_in* host, char* content, int length) {
     if (s < 0)
         DieWithSystemMessage("socket() failed");
 
-    char *servIP = "64.233.190.99";     // First arg: server IP address (dotted quad)
+    // char *servIP = "64.233.190.99";     // First arg: server IP address (dotted quad)
+    //
+    // struct sockaddr_in servAddr;            // Server address
+    //
+    // memset(&servAddr, 0, sizeof(servAddr)); // Zero out structure
+    // servAddr.sin_family = AF_INET;          // IPv4 address family
+    // // Convert address
+    // int rtnVal = inet_pton(AF_INET, servIP, &servAddr.sin_addr.s_addr);
+    //
+    // if (rtnVal == 0)
+    //     DieWithUserMessage("inet_pton() failed", "invalid address string");
+    // else if (rtnVal < 0)
+    //     DieWithSystemMessage("inet_pton() failed");
 
-    struct sockaddr_in servAddr;            // Server address
+    host->sin_port = htons(80);
 
-    memset(&servAddr, 0, sizeof(servAddr)); // Zero out structure
-    servAddr.sin_family = AF_INET;          // IPv4 address family
-    // Convert address
-    int rtnVal = inet_pton(AF_INET, servIP, &servAddr.sin_addr.s_addr);
-
-    if (rtnVal == 0)
-        DieWithUserMessage("inet_pton() failed", "invalid address string");
-    else if (rtnVal < 0)
-        DieWithSystemMessage("inet_pton() failed");
-
-    servAddr.sin_port = htons(80);
-
-    if(connect(s, (struct sockaddr*)&servAddr, sizeof(servAddr)) < 0)
+    if(connect(s, (struct sockaddr*)host, sizeof(*host)) < 0)
         DieWithSystemMessage("connect() failed");
 
-    printf("%s\n", content);
-    printf("%d\n", length);
+
     size_t numBytes = send(s, content, length, 0);
 
-    printf("%d\n", numBytes);
 
     if (numBytes < 0)
         DieWithSystemMessage("send() failed");
