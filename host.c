@@ -29,7 +29,34 @@ void DieWithSystemMessage(const char *msg) {
   exit(1);
 }
 
+int connectToClient(){
+    
+}
+
 int main(int argc, char const *argv[]) {
+    int sockfd, newsockfd, portno, clilen, n;
+    char * inBuffer = malloc(1024);
+    struct sockaddr_in serv_addr, cli_addr;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(9090);
+    serv_addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+          DieWithUserMessage("ded","ERROR on binding");
+    listen(sockfd,5);
+
+    clilen = sizeof(cli_addr);
+    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+    if (newsockfd < 0)
+      error("ERROR on accept");
+
+    bzero(inBuffer,1024);
+    n = recv(newsockfd,inBuffer,1024,0);
+    if (n < 0) error("ERROR reading from socket");
+        printf("Request:\n%s",inBuffer);
 
     char c;
     RequestState state =  NO_HOST;
@@ -39,7 +66,8 @@ int main(int argc, char const *argv[]) {
     int counter = 0;
     int i;
 
-    for(i = 0; (c = getchar()) != EOF; i++) {
+    for(i = 0; i < n; i++) {
+        c = *(inBuffer + i);
 
         if(i % BUFF_SIZE == 0){
             counter++;
@@ -55,7 +83,7 @@ int main(int argc, char const *argv[]) {
             break;
 
             case HOST:
-                if(c == '\n')
+                if(c == '\n' || c == ':')
                     state = WITH_HOST;
                 else if (c != ' ')
                     host[counterHost++] = c;
