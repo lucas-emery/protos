@@ -14,7 +14,7 @@ LIBS=-lm
 default: all
 
 all:	$(OBJS)
-	$(CC) -o client $^ $(CFLAGS)
+	$(CC) -o ../../client $^ $(CFLAGS)
 	rm *.o
 
 .PHONY: clean

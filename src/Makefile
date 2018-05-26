@@ -3,10 +3,10 @@ all:
 	$(MAKE) -C client
 
 server:
-	$(MAKE) all -C server
+	$(MAKE) -C server
 
 client:
-	$(MAKE) all -C client
+	$(MAKE) -C client
 
 clean:
 	$(MAKE) clean -C server
