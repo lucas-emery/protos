@@ -29,7 +29,7 @@ char* parseRequest(const char* inBuffer, int n) {
             break;
 
             case HOST:
-                if(c == '\n' || c == ':')
+                if(c == '\r' || c == ':')
                     state = WITH_HOST;
                 else if (c != ' ') {
 

@@ -3,6 +3,8 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <time.h>
+#include <sys/time.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -82,18 +84,70 @@ int main(int argc, char const *argv[]) {
     printf("Request:\n%s",inBuffer);
 
     char* hostname = parseRequest(inBuffer, n);
-
     serv_addr = findIp(hostname);
 
     if((servSock = connectToServer(serv_addr)) >= 0){
         char connectedMessage[128];
-        char * okString = "HTTP/1.1 200 Connection established\r\n\r\n";
+        char * okString = "HTTP/1.0 200 Connection established\r\n\r\n";
         strcpy(connectedMessage, okString);
-        send(cliSock, okString, strlen(okString),0);
+        //send(cliSock, okString, strlen(okString),0);
+    }
+    send(servSock, inBuffer, n, 0);
+
+    struct timeval timeout;
+    fd_set fdset;
+    int nfds = ((cliSock > servSock)?cliSock:servSock) + 1;
+
+    timeout.tv_sec = 30;
+    timeout.tv_usec = 0;
+
+    while(1){
+        FD_ZERO( &fdset );
+	    FD_SET( cliSock, &fdset );
+	    FD_SET( servSock, &fdset );
+
+        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, &timeout);
+        if( r == 0  )
+            DieWithSystemMessage("TIMEOUT");
+
+        int rfd, wfd;
+        int aux = 0;
+
+        bzero(inBuffer,BUFF_SIZE);
+        if(FD_ISSET(cliSock, &fdset)){
+            rfd = cliSock;
+            wfd = servSock;
+            aux = recv(rfd, inBuffer, BUFF_SIZE,0);
+            if(aux > 0){
+                printf("Forwarding from Client to Server: %d\n", aux);
+                printf("%s\n", inBuffer);
+                write(servSock, inBuffer, aux);
+                //send(servSock, inBuffer, aux, 0);
+            }
+        } else if(FD_ISSET(servSock, &fdset)){
+            rfd = servSock;
+            wfd = cliSock;
+            aux = recv(rfd, inBuffer, BUFF_SIZE,0);
+            if(aux > 0){
+                printf("Forwarding from Server to Client: %d\n", aux);
+                printf("%s\n", inBuffer);
+                write(cliSock, inBuffer, aux);
+                //send(servSock, inBuffer, aux, 0);
+            }
+        }
+        /*
+        bzero(inBuffer,BUFF_SIZE);
+        int aux = 0;
+        aux = recv(rfd, inBuffer, BUFF_SIZE,0);
+        printf("%d", aux);
+        if(aux > 0)
+            send(servSock, inBuffer, aux, 0);
+            */
     }
 
     bzero(inBuffer,1024);
     char aux[2048];
+    bzero(aux, 2048);
     n = recv(cliSock,aux,BUFF_SIZE,0);
 
     if (n < 0)
@@ -105,6 +159,7 @@ int main(int argc, char const *argv[]) {
 
 
     free(hostname);
+
     close(mSock);
     close(cliSock);
     close(servSock);
