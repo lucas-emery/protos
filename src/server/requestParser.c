@@ -2,27 +2,40 @@
 
 #define HOST_SIZE 1024
 
-typedef enum request_state {NO_HOST,
+typedef enum request_state {
+    METHOD,
+    NO_HOST,
     HOST,
     WITH_HOST,
     O,
     S,
     T,
     DOT
-} RequestState;
+} request_state_t;
 
-char* parseRequest(const char* inBuffer, int n) {
+void parseRequest(const char* inBuffer, int n, request_t* request) {
 
     char c;
-    RequestState state =  NO_HOST;
-    char* host = malloc(HOST_SIZE);
-    int counterHost = 0;
-    int buffCounter = 1;
+    request_state_t state =  METHOD;
+    char* host = malloc(0);
+    char method[50];
+    int methodCounter = 0;
+    int hostCounter = 0;
+    int buffCounter = 0;
 
     for(int i = 0; i < n; i++) {
         c = *(inBuffer + i);
 
         switch (state) {
+
+            case METHOD:
+                if(c == ' '){
+                    state = NO_HOST;
+                    method[methodCounter] = 0;
+                } else
+                    method[methodCounter++] = c;
+            break;
+
             case NO_HOST:
                 if(c == 'H')
                     state = O;
@@ -33,12 +46,12 @@ char* parseRequest(const char* inBuffer, int n) {
                     state = WITH_HOST;
                 else if (c != ' ') {
 
-                    if(counterHost % HOST_SIZE == 0){
-                        host = realloc(host, buffCounter * HOST_SIZE);
+                    if(hostCounter % HOST_SIZE == 0){
                         buffCounter++;
+                        host = realloc(host, buffCounter * HOST_SIZE);
                     }
 
-                    host[counterHost++] = c;
+                    host[hostCounter++] = c;
                 }
 
             break;
@@ -76,7 +89,16 @@ char* parseRequest(const char* inBuffer, int n) {
         }
     }
 
-    host[counterHost] = 0;
+    host[hostCounter] = 0;
 
-    return host;
+    if(strcmp(method, "CONNECT") == 0)
+        request->method = CONNECT;
+    else if(strcmp(method, "GET") == 0)
+        request->method = GET;
+    else if(strcmp(method, "POST") == 0)
+        request->method = POST;
+    else if(strcmp(method, "HEAD") == 0)
+        request->method = HEAD;
+
+    request->hostname = host;
 }

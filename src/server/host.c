@@ -16,15 +16,9 @@
 #define BUFF_SIZE 1024
 #define PORT_NUMBER 8085
 
-typedef enum method {CONNECT, GET, POST, HEAD} method_t;
-
-typedef struct {
-    char * hostname;
-    method_t method;
-} request_t;
-
 struct sockaddr_in* findIp(char* hostname);
 void connectToOrigin(struct sockaddr_in* host, char* content, int length);
+int connectToServer(struct sockaddr_in* host);
 
 int connectToServer(struct sockaddr_in* host){
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -47,6 +41,7 @@ int main(int argc, char const *argv[]) {
     int mSock, cliSock, servSock, n;
     socklen_t clilen;
     char * inBuffer = malloc(BUFF_SIZE);
+    struct request_t request;
 
     fflush(stdout);
 
@@ -65,12 +60,12 @@ int main(int argc, char const *argv[]) {
         DieWithSystemMessage("setsockopt(SO_REUSEADDR) failed");
 
 
-    if (bind(mSock, serv_addr, sizeof(struct sockaddr_in)) < 0)
+    if (bind(mSock, (struct sockaddr*)serv_addr, sizeof(struct sockaddr_in)) < 0)
         DieWithUserMessage("ded","ERROR on binding");
     listen(mSock,5);
 
     clilen = sizeof(struct sockaddr_in);
-    cliSock = accept(mSock, cli_addr, &clilen);
+    cliSock = accept(mSock, (struct sockaddr*)cli_addr, &clilen);
 
     if (cliSock < 0)
       DieWithSystemMessage("ERROR on accept");
@@ -83,8 +78,11 @@ int main(int argc, char const *argv[]) {
 
     printf("Request:\n%s",inBuffer);
 
-    char* hostname = parseRequest(inBuffer, n);
-    serv_addr = findIp(hostname);
+    parseRequest(inBuffer, n, &request);
+
+    printf("%s\n", request.hostname);
+
+    serv_addr = findIp(request.hostname);
 
     if((servSock = connectToServer(serv_addr)) >= 0){
         char connectedMessage[128];
@@ -153,12 +151,9 @@ int main(int argc, char const *argv[]) {
     if (n < 0)
         DieWithSystemMessage("ERROR reading from socket");
 
-    printf(aux);
+    // printf("%s", aux);
+
     //connectToOrigin(findIp(hostname), inBuffer, n);
-
-
-
-    free(hostname);
 
     close(mSock);
     close(cliSock);
@@ -174,8 +169,9 @@ struct sockaddr_in* findIp(char* hostname) {
     int rv;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET; // use AF_INET6 to force IPv6
+    hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
 
     if ( (rv = getaddrinfo( hostname , "http" , &hints , &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
@@ -188,7 +184,7 @@ struct sockaddr_in* findIp(char* hostname) {
         strcpy(ip , inet_ntoa( host -> sin_addr ) );
     }
 
-    freeaddrinfo(servinfo); // all done with this structure
+    freeaddrinfo(servinfo);
     return host;
 }
 
@@ -210,7 +206,7 @@ void connectToOrigin(struct sockaddr_in* host, char* content, int length) {
     else if (numBytes != length)
         DieWithUserMessage("send()", "sent unexpected number of bytes");
 
-    unsigned int totalBytesRcvd = 0; // Count of total bytes received
+    unsigned int totalBytesRcvd = 0;
     char* buffer = malloc(BUFF_SIZE + 1);
     int i = 0;
 
