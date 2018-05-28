@@ -12,8 +12,8 @@
 #include <netinet/in.h>
 #include "requestParser.h"
 #include "message.h"
+#include "lib.h"
 
-#define BUFF_SIZE 1024
 #define PORT_NUMBER 8085
 
 typedef enum method {CONNECT, GET, POST, HEAD} method_t;
@@ -65,12 +65,12 @@ int main(int argc, char const *argv[]) {
         DieWithSystemMessage("setsockopt(SO_REUSEADDR) failed");
 
 
-    if (bind(mSock, serv_addr, sizeof(struct sockaddr_in)) < 0)
+    if (bind(mSock, (struct sockaddr*)serv_addr, sizeof(struct sockaddr_in)) < 0)
         DieWithUserMessage("ded","ERROR on binding");
     listen(mSock,5);
 
     clilen = sizeof(struct sockaddr_in);
-    cliSock = accept(mSock, cli_addr, &clilen);
+    cliSock = accept(mSock, (struct sockaddr*)cli_addr, &clilen);
 
     if (cliSock < 0)
       DieWithSystemMessage("ERROR on accept");

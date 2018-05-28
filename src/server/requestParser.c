@@ -1,8 +1,7 @@
 #include "requestParser.h"
 
-#define HOST_SIZE 1024
-
-typedef enum request_state {NO_HOST,
+typedef enum request_state {
+    NO_HOST,
     HOST,
     WITH_HOST,
     O,
@@ -15,7 +14,7 @@ char* parseRequest(const char* inBuffer, int n) {
 
     char c;
     RequestState state =  NO_HOST;
-    char* host = malloc(HOST_SIZE);
+    char* host = malloc(BUFF_SIZE);
     int counterHost = 0;
     int buffCounter = 1;
 
@@ -33,8 +32,8 @@ char* parseRequest(const char* inBuffer, int n) {
                     state = WITH_HOST;
                 else if (c != ' ') {
 
-                    if(counterHost % HOST_SIZE == 0){
-                        host = realloc(host, buffCounter * HOST_SIZE);
+                    if(counterHost % BUFF_SIZE == 0){
+                        host = realloc(host, buffCounter * BUFF_SIZE);
                         buffCounter++;
                     }
 
