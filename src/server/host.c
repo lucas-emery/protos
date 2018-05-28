@@ -15,6 +15,7 @@
 #include "lib.h"
 
 #define PORT_NUMBER 8085
+#define CLIENT_BLOCK 5
 
 typedef enum method {CONNECT, GET, POST, HEAD} method_t;
 
@@ -25,144 +26,42 @@ typedef struct {
 
 struct sockaddr_in* findIp(char* hostname);
 void connectToOrigin(struct sockaddr_in* host, char* content, int length);
-
-int connectToServer(struct sockaddr_in* host){
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (sockfd < 0){
-        DieWithSystemMessage("socket() failed");
-    }
-
-    host->sin_port = htons(80);
-
-    if(connect(sockfd, (struct sockaddr*)host, sizeof(*host)) < 0){
-        DieWithSystemMessage("connect() failed");
-    }
-
-    return sockfd;
-}
+void serveClient(void*);
 
 int main(int argc, char const *argv[]) {
 
-    int mSock, cliSock, servSock, n;
+    int mSock, clientCount = 0;
     socklen_t clilen;
     char * inBuffer = malloc(BUFF_SIZE);
-
-    fflush(stdout);
+    pthread_t * clients = NULL;
 
     struct sockaddr_in *my_addr = malloc(sizeof(struct sockaddr_in));
-    struct sockaddr_in *cli_addr = malloc(sizeof(struct sockaddr_in));
-    struct sockaddr_in *serv_addr = malloc(sizeof(struct sockaddr_in));
 
     mSock = socket(AF_INET, SOCK_STREAM,0);
     bzero((char *) my_addr, sizeof(struct sockaddr_in));
-    serv_addr->sin_family = AF_INET;
-    serv_addr->sin_port = htons(PORT_NUMBER);
-    serv_addr->sin_addr.s_addr = INADDR_ANY;
+    my_addr->sin_family = AF_INET;
+    my_addr->sin_port = htons(PORT_NUMBER);
+    my_addr->sin_addr.s_addr = INADDR_ANY;
 
     int enable = 1;
     if (setsockopt(mSock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
         DieWithSystemMessage("setsockopt(SO_REUSEADDR) failed");
 
-
-    if (bind(mSock, (struct sockaddr*)serv_addr, sizeof(struct sockaddr_in)) < 0)
+    if (bind(mSock, my_addr, sizeof(struct sockaddr_in)) < 0)
         DieWithUserMessage("ded","ERROR on binding");
+
     listen(mSock,5);
 
-    clilen = sizeof(struct sockaddr_in);
-    cliSock = accept(mSock, (struct sockaddr*)cli_addr, &clilen);
-
-    if (cliSock < 0)
-      DieWithSystemMessage("ERROR on accept");
-
-    bzero(inBuffer,1024);
-    n = recv(cliSock,inBuffer,BUFF_SIZE,0);
-
-    if (n < 0)
-        DieWithSystemMessage("ERROR reading from socket");
-
-    printf("Request:\n%s",inBuffer);
-
-    char* hostname = parseRequest(inBuffer, n);
-    serv_addr = findIp(hostname);
-
-    if((servSock = connectToServer(serv_addr)) >= 0){
-        char connectedMessage[128];
-        char * okString = "HTTP/1.0 200 Connection established\r\n\r\n";
-        strcpy(connectedMessage, okString);
-        //send(cliSock, okString, strlen(okString),0);
-    }
-    send(servSock, inBuffer, n, 0);
-
-    struct timeval timeout;
-    fd_set fdset;
-    int nfds = ((cliSock > servSock)?cliSock:servSock) + 1;
-
-    timeout.tv_sec = 30;
-    timeout.tv_usec = 0;
 
     while(1){
-        FD_ZERO( &fdset );
-	    FD_SET( cliSock, &fdset );
-	    FD_SET( servSock, &fdset );
-
-        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, &timeout);
-        if( r == 0  )
-            DieWithSystemMessage("TIMEOUT");
-
-        int rfd, wfd;
-        int aux = 0;
-
-        bzero(inBuffer,BUFF_SIZE);
-        if(FD_ISSET(cliSock, &fdset)){
-            rfd = cliSock;
-            wfd = servSock;
-            aux = recv(rfd, inBuffer, BUFF_SIZE,0);
-            if(aux > 0){
-                printf("Forwarding from Client to Server: %d\n", aux);
-                printf("%s\n", inBuffer);
-                write(servSock, inBuffer, aux);
-                //send(servSock, inBuffer, aux, 0);
-            }
-        } else if(FD_ISSET(servSock, &fdset)){
-            rfd = servSock;
-            wfd = cliSock;
-            aux = recv(rfd, inBuffer, BUFF_SIZE,0);
-            if(aux > 0){
-                printf("Forwarding from Server to Client: %d\n", aux);
-                printf("%s\n", inBuffer);
-                write(cliSock, inBuffer, aux);
-                //send(servSock, inBuffer, aux, 0);
-            }
+        if(clientCount % CLIENT_BLOCK == 0){
+            clients = realloc(clients, (clientCount + CLIENT_BLOCK)*sizeof(pthread_t));
         }
-        /*
-        bzero(inBuffer,BUFF_SIZE);
-        int aux = 0;
-        aux = recv(rfd, inBuffer, BUFF_SIZE,0);
-        printf("%d", aux);
-        if(aux > 0)
-            send(servSock, inBuffer, aux, 0);
-            */
+        pthread_create(&clients[clientCount], NULL, serveClient, (void *) accept(mSock, malloc(sizeof(struct sockaddr_in)), &clilen));
+        clientCount++;
     }
 
-    bzero(inBuffer,1024);
-    char aux[2048];
-    bzero(aux, 2048);
-    n = recv(cliSock,aux,BUFF_SIZE,0);
-
-    if (n < 0)
-        DieWithSystemMessage("ERROR reading from socket");
-
-    printf(aux);
-    //connectToOrigin(findIp(hostname), inBuffer, n);
-
-
-
-    free(hostname);
-
     close(mSock);
-    close(cliSock);
-    close(servSock);
 
     return 0;
 }
