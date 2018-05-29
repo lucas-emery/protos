@@ -70,9 +70,9 @@ void serveClient(void * arg){
             if(aux > 0){
                 destSock = getservSocks(connection, inBuffer, aux);
                 if(destSock >= 0){
-                    printf("Sending to %d\n", destSock);
-                    printf("%s\n", inBuffer);
                     send(destSock, inBuffer, aux, 0);
+                } else {
+                    send(cliSock, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"),0);
                 }
             }
         } else {
@@ -86,8 +86,6 @@ void serveClient(void * arg){
                 break;
             aux = recv(srcSock, inBuffer, BUFF_SIZE,0);
             if(aux > 0){
-                printf("Read from %d\n", srcSock);
-                printf("%s\n", inBuffer);
                 send(cliSock, inBuffer, aux, 0);
             }
         }
