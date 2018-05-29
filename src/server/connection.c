@@ -12,9 +12,10 @@
 #include <netinet/in.h>
 #include "requestParser.h"
 #include "message.h"
+#include "lib.h"
 
-#define BUFF_SIZE 2048
 #define SERV_BLOCK 5
+#define SIZE 4096
 
 typedef struct {
     int servCount;
@@ -25,13 +26,12 @@ typedef struct {
 typedef connectionCDT* connectionADT;
 
 struct sockaddr_in* findIp(char* hostname);
+char * readSocket(int sock, int * len);
 
 void serveClient(void * arg){
     int cliSock = (int) arg;
     printf("I am a thread and this is my cliSock: %d\n", cliSock);
-
-    char * inBuffer = malloc(BUFF_SIZE);
-    int read, nfds = cliSock;
+    int count = 0;
 
     connectionADT connection = malloc(sizeof(connectionCDT));
     connection->servCount = 0;
@@ -39,40 +39,30 @@ void serveClient(void * arg){
     if (cliSock < 0)
       DieWithSystemMessage("ERROR on accept");
 
-    struct timeval timeout;
     fd_set fdset;
-
-    timeout.tv_sec = 30;
-    timeout.tv_usec = 0;
 
     while(1){
 
-        FD_ZERO( &fdset );
-	    FD_SET( cliSock, &fdset );
-        nfds = cliSock;
-        for(int i = 0; i < connection->servCount ; i++){
-            if(connection->servSocks[i] > nfds)
-                nfds = connection->servSocks[i];
-	        FD_SET( connection->servSocks[i], &fdset );
-        }
-        nfds += 1;
+        int nfds = prepareSelect(cliSock, connection, &fdset);
 
-        int aux = 0;
+        int length = 0;
 
-        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, &timeout);
+        char * buffer = NULL;
+
+        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, NULL);
         if( r == 0  )
             DieWithSystemMessage("TIMEOUT");
 
-        bzero(inBuffer,BUFF_SIZE);
         if(FD_ISSET(cliSock, &fdset)){
             int destSock;
-            aux = recv(cliSock, inBuffer, BUFF_SIZE,0);
-            if(aux > 0){
-                destSock = getservSocks(connection, inBuffer, aux);
+            buffer = readSocket(cliSock, &length);
+            if(length > 0){
+                //printf("%s\n", buffer);
+                destSock = getservSocks(connection, buffer, length);
                 if(destSock >= 0){
-                    printf("Sending to %d\n", destSock);
-                    printf("%s\n", inBuffer);
-                    send(destSock, inBuffer, aux, 0);
+                    writeSocket(destSock,buffer,length);
+                } else {
+                    send(cliSock, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"),0);
                 }
             }
         } else {
@@ -84,14 +74,74 @@ void serveClient(void * arg){
             }
             if(srcSock < 0)
                 break;
-            aux = recv(srcSock, inBuffer, BUFF_SIZE,0);
-            if(aux > 0){
-                printf("Read from %d\n", srcSock);
-                printf("%s\n", inBuffer);
-                send(cliSock, inBuffer, aux, 0);
+            buffer = readSocket(srcSock,&length);
+            //printf("%s\n", buffer);
+            if(length > 0){
+                transform(buffer);
+                printf("sending to client\n");
+                writeSocket(cliSock,buffer,length);
             }
         }
+        //free(buffer);
     }
+}
+
+void transform(char * body){
+
+}
+
+char * readSocket(int sock, int * len){
+    int finished = 0, blockCount = 0, totalLength = 0, length = 0;
+    char * inBuffer = malloc(BUFF_SIZE);
+    char * buffer = NULL;
+
+    //while(!finished){
+        bzero(inBuffer,BUFF_SIZE);
+        length = recv(sock, inBuffer, BUFF_SIZE,0);
+        totalLength += length;
+
+        if(totalLength >= blockCount*BUFF_SIZE){
+            blockCount++;
+            buffer = realloc(buffer, BUFF_SIZE*blockCount);
+        }
+
+        if(length > 0)
+            strcat(buffer, inBuffer);
+        else
+            finished = 1;
+
+    //}
+    free(inBuffer);
+    *len = totalLength;
+    return buffer;
+}
+
+int writeSocket(int sock, char * buffer, int len){
+    int sent = 0, finished = 0, totalSent = 0;
+
+    while(!finished){
+        sent = send(sock, buffer + totalSent, len - totalSent, 0);
+        totalSent+=sent;
+
+        if(sent == 0)
+            finished = 1;
+    }
+
+    return totalSent;
+}
+
+int prepareSelect(int cliSock, connectionADT connection, fd_set * fdset){
+    int nfds = cliSock;
+
+    FD_ZERO( fdset );
+    FD_SET( cliSock, fdset );
+    for(int i = 0; i < connection->servCount ; i++){
+        if(connection->servSocks[i] > nfds)
+            nfds = connection->servSocks[i];
+        FD_SET( connection->servSocks[i], fdset );
+    }
+
+    return nfds + 1;
 }
 
 int getservSocks(connectionADT connection, char * buffer, int length){

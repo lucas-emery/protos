@@ -51,7 +51,6 @@ int main(int argc, char const *argv[]) {
 
     listen(mSock,5);
 
-
     while(1){
         if(clientCount % CLIENT_BLOCK == 0){
             clients = realloc(clients, (clientCount + CLIENT_BLOCK)*sizeof(pthread_t));
