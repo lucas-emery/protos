@@ -24,6 +24,8 @@ typedef struct {
 
 typedef connectionCDT* connectionADT;
 
+struct sockaddr_in* findIp(char* hostname);
+
 void serveClient(void * arg){
     int cliSock = (int) arg;
     printf("I am a thread and this is my cliSock: %d\n", cliSock);
@@ -65,11 +67,13 @@ void serveClient(void * arg){
         if(FD_ISSET(cliSock, &fdset)){
             int destSock;
             aux = recv(cliSock, inBuffer, BUFF_SIZE,0);
-            printf("%s\n", inBuffer);
             if(aux > 0){
                 destSock = getservSocks(connection, inBuffer, aux);
-                printf("Sending to %d\n", destSock);
-                send(destSock, inBuffer, aux, 0);
+                if(destSock >= 0){
+                    printf("Sending to %d\n", destSock);
+                    printf("%s\n", inBuffer);
+                    send(destSock, inBuffer, aux, 0);
+                }
             }
         } else {
             int srcSock = -1;
@@ -82,6 +86,8 @@ void serveClient(void * arg){
                 break;
             aux = recv(srcSock, inBuffer, BUFF_SIZE,0);
             if(aux > 0){
+                printf("Read from %d\n", srcSock);
+                printf("%s\n", inBuffer);
                 send(cliSock, inBuffer, aux, 0);
             }
         }
@@ -90,11 +96,13 @@ void serveClient(void * arg){
 
 int getservSocks(connectionADT connection, char * buffer, int length){
     char *hostName = parseRequest(buffer, length);
+    if(hostName == NULL)
+        return -1;
     struct sockaddr_in *serv_addr = findIp(hostName);
     for(int i = 0; i < connection->servCount; i++){
         if(strcmp(connection->servIps[i],hostName)==0){
-            free(hostName);
-            free(serv_addr);
+            //free(hostName);
+            //free(serv_addr);
             return connection->servSocks[i];
         }
     }
@@ -115,13 +123,37 @@ int connectToServer(struct sockaddr_in* host){
     if (sockfd < 0){
         DieWithSystemMessage("socket() failed");
     }
-    printf("didnt\n");
+
     host->sin_port = htons(80);
-    printf("passed this]\n");
 
     if(connect(sockfd, (struct sockaddr*)host, sizeof(*host)) < 0){
         DieWithSystemMessage("connect() failed");
     }
 
     return sockfd;
+}
+
+struct sockaddr_in* findIp(char* hostname) {
+    char ip[100];
+    struct addrinfo hints, *servinfo, *p;
+    struct sockaddr_in *host;
+    int rv;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; // use AF_INET6 to force IPv6
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ( (rv = getaddrinfo( hostname , "http" , &hints , &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return NULL;
+    }
+
+    // loop through all the results and connect to the first we can
+    for(p = servinfo; p != NULL; p = p -> ai_next) {
+        host = (struct sockaddr_in *) p -> ai_addr;
+        strcpy(ip , inet_ntoa( host -> sin_addr ) );
+    }
+
+    freeaddrinfo(servinfo); // all done with this structure
+    return host;
 }

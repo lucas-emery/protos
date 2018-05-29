@@ -12,6 +12,14 @@ typedef enum request_state {
 
 char* parseRequest(const char* inBuffer, int n) {
 
+    char aux[8];
+    for(int i = 0; i < 8; i++)
+        aux[i] = inBuffer[i];
+    aux[7] = 0;
+
+    if(strcmp(aux, "CONNECT") == 0)
+        return NULL;
+
     char c;
     RequestState state =  NO_HOST;
     char* host = malloc(BUFF_SIZE);

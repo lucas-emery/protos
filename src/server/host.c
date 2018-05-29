@@ -14,7 +14,7 @@
 #include "message.h"
 #include "lib.h"
 
-#define PORT_NUMBER 8085
+#define PORT_NUMBER 8090
 #define CLIENT_BLOCK 5
 
 typedef enum method {CONNECT, GET, POST, HEAD} method_t;
@@ -24,7 +24,6 @@ typedef struct {
     method_t method;
 } request_t;
 
-struct sockaddr_in* findIp(char* hostname);
 void connectToOrigin(struct sockaddr_in* host, char* content, int length);
 void serveClient(void*);
 
@@ -64,31 +63,6 @@ int main(int argc, char const *argv[]) {
     close(mSock);
 
     return 0;
-}
-
-struct sockaddr_in* findIp(char* hostname) {
-    char ip[100];
-    struct addrinfo hints, *servinfo, *p;
-    struct sockaddr_in *host;
-    int rv;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET; // use AF_INET6 to force IPv6
-    hints.ai_socktype = SOCK_STREAM;
-
-    if ( (rv = getaddrinfo( hostname , "http" , &hints , &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return NULL;
-    }
-
-    // loop through all the results and connect to the first we can
-    for(p = servinfo; p != NULL; p = p -> ai_next) {
-        host = (struct sockaddr_in *) p -> ai_addr;
-        strcpy(ip , inet_ntoa( host -> sin_addr ) );
-    }
-
-    freeaddrinfo(servinfo); // all done with this structure
-    return host;
 }
 
 void connectToOrigin(struct sockaddr_in* host, char* content, int length) {
