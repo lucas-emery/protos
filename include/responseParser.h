@@ -9,5 +9,6 @@ struct response {
     int length;
     char* mediaType;
     char* body;
+    int chunked;
 };
 response_t* parseResponse(const char* inBuffer, int n);

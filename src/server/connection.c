@@ -13,7 +13,6 @@
 #include "requestParser.h"
 #include "message.h"
 
-#define BUFF_SIZE 2048
 #define SERV_BLOCK 5
 
 typedef struct {
@@ -25,25 +24,25 @@ typedef struct {
 typedef connectionCDT* connectionADT;
 
 struct sockaddr_in* findIp(char* hostname);
+int getservSocks(connectionADT connection, char * buffer, int length);
+int connectToServer(struct sockaddr_in* host);
+void serveClient(void * arg);
 
 void serveClient(void * arg){
     int cliSock = (int) arg;
     printf("I am a thread and this is my cliSock: %d\n", cliSock);
 
     char * inBuffer = malloc(BUFF_SIZE);
-    int read, nfds = cliSock;
+    int nfds = cliSock;
 
     connectionADT connection = malloc(sizeof(connectionCDT));
     connection->servCount = 0;
+    connection->servIps = malloc(sizeof(char*));
 
     if (cliSock < 0)
       DieWithSystemMessage("ERROR on accept");
 
-    struct timeval timeout;
     fd_set fdset;
-
-    timeout.tv_sec = 30;
-    timeout.tv_usec = 0;
 
     while(1){
 
@@ -59,7 +58,7 @@ void serveClient(void * arg){
 
         int aux = 0;
 
-        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, &timeout);
+        int r = select( nfds, &fdset, (fd_set*) 0, (fd_set*) 0, NULL);
         if( r == 0  )
             DieWithSystemMessage("TIMEOUT");
 
