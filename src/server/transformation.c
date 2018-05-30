@@ -12,7 +12,7 @@ void activateTransformation(char* mediaType, transformation_type_t type) {
     new.type = type;
     new.activated = TRUE;
 
-    for (size_t i = 0; i < transformationCount && finished == TRUE; i++) {
+    for (size_t i = 0; i < transformationCount && !finished; i++) {
 
         if( equals(&new, transformations + i) ) {
             transformations[i].activated = TRUE;
@@ -33,7 +33,7 @@ int deactivateTransformation(char* mediaType, transformation_type_t type) {
     new.mediaType = mediaType;
     new.type = type;
 
-    for (size_t i = 0; i < transformationCount && finished == TRUE; i++) {
+    for (size_t i = 0; i < transformationCount && !finished; i++) {
 
         if( equals(&new, transformations + i) ) {
             transformations[i].activated = FALSE;
@@ -48,7 +48,7 @@ int deactivateTransformation(char* mediaType, transformation_type_t type) {
     return 0;
 }
 
-void execute(char* mediaType) {
+void execute(char* mediaType, char* body) {
 
     for (size_t i = 0; i < transformationCount; i++) {
 
