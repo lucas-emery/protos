@@ -40,10 +40,10 @@ char* parseRequest(const char* inBuffer, int n) {
                     state = WITH_HOST;
                 else if (c != ' ') {
 
-                    // if(counterHost % BUFF_SIZE == 0){
-                    //     host = realloc(host, buffCounter * BUFF_SIZE);
-                    //     buffCounter++;
-                    // }
+                    if(counterHost % BUFF_SIZE == 0){
+                        host = realloc(host, buffCounter * BUFF_SIZE);
+                        buffCounter++;
+                    }
 
                     host[counterHost++] = c;
                 }
