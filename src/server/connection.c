@@ -87,7 +87,7 @@ void serveClient(void * arg){
                 break;
 
             pthread_t t;
-            char* bin = "./echo";
+            char* bin = "./bin/echo";
             int* in = malloc(sizeof(int));
             int* out = malloc(sizeof(int));
             *in = srcSock;

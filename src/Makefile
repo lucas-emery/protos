@@ -1,6 +1,10 @@
 all:
 	$(MAKE) -C server
-	$(MAKE) -C client
+	#$(MAKE) -C client
+	$(MAKE) -C transformations
+
+transformations:
+	$(MAKE) -C transformations
 
 server:
 	$(MAKE) -C server
