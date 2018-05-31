@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include "requestParser.h"
 #include "message.h"
 
@@ -31,7 +32,7 @@ void * transform(void*);
 
 void serveClient(void * arg){
     int cliSock = (int) arg;
-    printf("I am a thread and this is my cliSock: %d\n", cliSock);
+    // printf("I am a thread and this is my cliSock: %d\n", cliSock);
 
     char * inBuffer = malloc(BUFF_SIZE);
     int nfds = cliSock;
@@ -84,9 +85,11 @@ void serveClient(void * arg){
             }
             if(srcSock < 0)
                 break;
+
             pthread_t t;
-            char * bin = "./toUpper";
-            int * in = malloc(sizeof(int)), * out = malloc(sizeof(int));
+            char* bin = "./echo";
+            int* in = malloc(sizeof(int));
+            int* out = malloc(sizeof(int));
             *in = srcSock;
             *out = cliSock;
             void * arg[3];
@@ -110,6 +113,10 @@ int getservSocks(connectionADT connection, char * buffer, int length){
     if(hostName == NULL)
         return -1;
     struct sockaddr_in *serv_addr = findIp(hostName);
+
+    if(serv_addr == NULL)
+        return -1;
+
     for(int i = 0; i < connection->servCount; i++){
         if(strcmp(connection->servIps[i],hostName)==0){
             //free(hostName);

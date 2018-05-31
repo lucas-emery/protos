@@ -5,7 +5,6 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <unistd.h>
-
 #include "buffer.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -21,12 +20,15 @@ void * transform(void ** args){
 
     printf("reading from %d\n", infd);
     printf("writing to %d\n", outfd);
+    printf("bin: %s\n", bin);
 
     int fds[] = { -1, -1, -1, -1};
+
     if(init(fds,bin,infd,outfd) != 0){
         perror("forking");
         return NULL;
     }
+
     serve(fds);
     printf("finished\n");
     return NULL;
@@ -52,9 +54,11 @@ static int init(int * fds, char * bin, int infd, int outfd){
 
     const pid_t cmdpid = fork();
     if (cmdpid == -1) {
+
        perror("creating process for user command");
        exit(EXIT_FAILURE);
        return EXIT_FAILURE;
+
     } else if (cmdpid == 0) {
         // en el hijo debemos reemplazar stdin y stdout por los pipes antes
         // de ejecutar el comando.
@@ -63,14 +67,16 @@ static int init(int * fds, char * bin, int infd, int outfd){
         close(in [W]);
         close(out[R]);
         in [W] = out[R] = -1;
-        dup2(in [R], infd);
-        dup2(out[W], outfd);
+        dup2(in [R], STDIN_FILENO);
+        dup2(out[W], STDOUT_FILENO);
+
         if(-1 == execv(bin, (char **) 0)) {
             perror("executing command");
             close(in [R]);
             close(out[W]);
             ret = 1;
         }
+
         exit(ret);
     } else {
         close(in [R]);
@@ -87,22 +93,11 @@ static int init(int * fds, char * bin, int infd, int outfd){
 }
 
 /**
- * Calcula la paridad de byte de un arreglo `ptr' que tiene `n' elemenos.
- * Actualiza el valor en *parity.
- */
-static void
-parity(const uint8_t *ptr, const ssize_t n, uint8_t *parity) {
-    for(ssize_t i = 0; i < n; i++) {
-        *parity ^= ptr[i];
-    }
-}
-
-/**
  * Lee bytes desde *fd, dejando el resultado en *buff, y calculando
  * opcionalmente la paridad.
  */
 static int
-doread(int *fd, struct buffer *buff, uint8_t *par) {
+doread(int *fd, struct buffer *buff) {
     uint8_t *ptr;
     ssize_t  n;
      size_t  count = 0;
@@ -115,9 +110,6 @@ doread(int *fd, struct buffer *buff, uint8_t *par) {
         *fd = -1;
         ret = -1;
     } else {
-        if(NULL != par) {
-            parity(ptr, n, par);
-        }
         buffer_write_adv(buff, n);
     }
 
@@ -128,7 +120,7 @@ doread(int *fd, struct buffer *buff, uint8_t *par) {
  * Escribe bytes de buff, en *fd, calculando la paridad a byte opcionalmente.
  */
 static int
-dowrite(int *fd, struct buffer *buff, uint8_t *par) {
+dowrite(int *fd, struct buffer *buff) {
     uint8_t *ptr;
     ssize_t  n;
      size_t  count = 0;
@@ -140,9 +132,6 @@ dowrite(int *fd, struct buffer *buff, uint8_t *par) {
         *fd = -1;
         ret = -1;
     } else {
-        if(NULL != par) {
-            parity(ptr, n, par);
-        }
         buffer_read_adv(buff, n);
     }
 
@@ -183,32 +172,35 @@ serve(int *fds) {
     buffer_init(&bou, N(buff_out), buff_out);
 
 
-    // paridades
-    uint8_t parity_in = 0x00, parity_out = 0x00;
-
     do {
         // Cálculo del primer argumento de select.
         int nfds = 0;
+
         for(unsigned i = 0 ; i < 4; i++) {
             if(fds[i] > nfds) {
                 nfds = fds[i];
             }
         }
+
         nfds += 1;
 
         // Cálcúlo de intereses de lectura y escritura basándose en
         // los estados de los buffers y la existencia de file descriptors
         fd_set readfds, writefds;
         FD_ZERO(&readfds); FD_ZERO(&writefds);
+
         if(fds[EX_R] != -1 && buffer_can_write(&bin)) {
             FD_SET(fds[EX_R], &readfds);
         }
+
         if(fds[CH_R] != -1 && buffer_can_write(&bou)) {
             FD_SET(fds[CH_R], &readfds);
         }
+
         if(fds[CH_W] != -1 && buffer_can_read(&bin)) {
             FD_SET(fds[CH_W], &writefds);
         }
+
         if(fds[EX_W] != -1 && buffer_can_read(&bou)) {
             FD_SET(fds[EX_W], &writefds);
         }
@@ -222,20 +214,22 @@ serve(int *fds) {
         } else {
             if(FD_ISSET(fds[EX_R], &readfds)) { //read from server
                 printf("selected servR\n");
-                doread(fds + EX_R, &bin, &parity_in);
-
+                doread(fds + EX_R, &bin);
             }
+
             if(FD_ISSET(fds[CH_R], &readfds)) { //read from child
                 printf("selected chR\n");
-                doread(fds + CH_R, &bou, NULL);
+                doread(fds + CH_R, &bou);
             }
+
             if(FD_ISSET(fds[CH_W], &writefds)) { //write to child
                 printf("selected chW\n");
-                dowrite(fds + CH_W, &bin, NULL);
+                dowrite(fds + CH_W, &bin);
             }
+
             if(FD_ISSET(fds[EX_W], &writefds)) { //write to server
                 printf("selected clientW\n");
-                dowrite(fds + EX_W, &bou, &parity_out);
+                dowrite(fds + EX_W, &bou);
             }
 
             // si ya no podemos leer, dejamos de escribir
@@ -244,6 +238,7 @@ serve(int *fds) {
                 close(fds[CH_W]);
                 fds[CH_W] = -1;
             }
+
             if(-1 == fds[CH_R] && -1!= fds[EX_W] && !buffer_can_read(&bou)) {
                 printf("closing\n");
                 close(fds[EX_W]);
@@ -258,7 +253,4 @@ serve(int *fds) {
             break;
         }
     } while(1);
-
-    fprintf(stderr, "in  parity: 0x%02X\n", parity_in);
-    fprintf(stderr, "out parity: 0x%02X\n", parity_out);
 }
