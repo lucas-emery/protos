@@ -27,6 +27,7 @@ struct sockaddr_in* findIp(char* hostname);
 int getservSocks(connectionADT connection, char * buffer, int length);
 int connectToServer(struct sockaddr_in* host);
 void serveClient(void * arg);
+void * transform(void*);
 
 void serveClient(void * arg){
     int cliSock = (int) arg;
@@ -83,10 +84,23 @@ void serveClient(void * arg){
             }
             if(srcSock < 0)
                 break;
+            pthread_t t;
+            char * bin = "./toUpper";
+            int * in = malloc(sizeof(int)), * out = malloc(sizeof(int));
+            *in = srcSock;
+            *out = cliSock;
+            void * arg[3];
+            arg[0] = (void*) bin;
+            arg[1] = (void*) in;
+            arg[2] = (void*) out;
+            pthread_create(&t, 0, transform, arg);
+            pthread_join(t,NULL);
+            /*
             aux = recv(srcSock, inBuffer, BUFF_SIZE,0);
             if(aux > 0){
                 send(cliSock, inBuffer, aux, 0);
             }
+            */
         }
     }
 }
