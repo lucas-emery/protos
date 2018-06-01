@@ -1,5 +1,5 @@
-#ifndef APP_H_
-#define APP_H_
+#ifndef SERVERSCTP_H_
+#define SERVERSCTP_H_
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,9 +13,10 @@
 
 #define MAX_BUFFER 1024
 #define MY_PORT_NUM 9090
-
-int getParams(int cantParams, char const *params[], char buffer[]);
-void parseResponse(char * buffer, int requests);
+ 
+void parseRequest(char * buffer, char * bufferRta);
+void getMetric(char type, char * metric);
+int applyFilter(char type);
 void DieWithSystemMessage(const char *msg);
 void DieWithUserMessage(const char *msg, const char *detail);
 
