@@ -10,16 +10,10 @@ int main(int argc, char const *argv[]) {
         if(c == '\n') {
             if((c = getchar()) == '\r')
                 count++;
-            if(count == 1)
-                putchar(toupper(c));
-            else
-                putchar(c);
+            putchar(c);
         }
 
-        if(count == 1)
-            putchar(toupper(c));
-        else
-            putchar(c);
+        putchar(c);
     } while(count <= 1);
     return 0;
 }
