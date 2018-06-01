@@ -25,7 +25,7 @@ typedef struct {
 } request_t;
 
 void serveClient(void*);
-
+/*
 int main(int argc, char const *argv[]) {
 
     int mSock, clientCount = 0;
@@ -62,3 +62,4 @@ int main(int argc, char const *argv[]) {
 
     return 0;
 }
+*/
