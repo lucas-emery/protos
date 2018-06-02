@@ -1,9 +1,17 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include <netdb.h>
+#include <arpa/inet.h>
 
 #include <netinet/in.h>
 
 #include "buffer.h"
+
+#include "lib.h"
 
 typedef enum {
     GET,
@@ -14,14 +22,14 @@ typedef enum {
 
 struct request {
     method_t method;
-    char * body;
+    char * host;
 };
 
-typedef enum {
+enum request_state{
    request_method,
-   request_version,
    request_host,
    request_headers,
+   request_enter,
    request_body,
 
    // apartir de aca están done
@@ -29,15 +37,19 @@ typedef enum {
 
    // y apartir de aca son considerado con error
    request_error
-} request_state_t;
+};
 
 struct request_parser {
    struct request *request;
-   request_state_t state;
+   enum request_state state;
    /** cuantos bytes tenemos que leer*/
    uint8_t n;
    /** cuantos bytes ya leimos */
    uint8_t i;
+   /**cuantos bytes quedan por leer de una seleccion*/
+   uint8_t remaining;
+   /**buffer auxiliar*/
+   char* buffer;
 };
 
 /*
@@ -51,18 +63,10 @@ struct request_parser {
  * ..."-- sección 6
  *
  */
-enum socks_response_status {
-    status_succeeded                          = 0x00,
-    status_general_SOCKS_server_failure       = 0x01,
-    status_connection_not_allowed_by_ruleset  = 0x02,
-    status_network_unreachable                = 0x03,
-    status_host_unreachable                   = 0x04,
-    status_connection_refused                 = 0x05,
-    status_ttl_expired                        = 0x06,
-    status_command_not_supported              = 0x07,
-    status_address_type_not_supported         = 0x08,
-};
 
+
+ void
+ request_log();
 
 /** inicializa el parser */
 void
@@ -93,26 +97,3 @@ request_is_done(const enum request_state st, bool *errored);
 
 void
 request_close(struct request_parser *p);
-
-/**
- * serializa en buff la una respuesta al request.
- *
- * Retorna la cantidad de bytes ocupados del buffer o -1 si no había
- * espacio suficiente.
- */
-extern int
-request_marshall(buffer *b,
-                 const enum socks_response_status status);
-
-
-/** convierte a errno en socks_response_status */
-enum socks_response_status
-errno_to_socks(int e);
-
-#include <netdb.h>
-#include <arpa/inet.h>
-
-/** se encarga de la resolcuión de un request */
-enum socks_response_status
-cmd_resolve(struct request* request,  struct sockaddr **originaddr,
-            socklen_t *originlen, int *domain);
