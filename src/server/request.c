@@ -1,4 +1,5 @@
 #include "request.h"
+#include <errno.h>
 
 static enum request_state
 method(const uint8_t c, struct request_parser* p);
@@ -225,4 +226,27 @@ body(const uint8_t c, struct request_parser* p) {
     //TODO chunked
 
     return next;
+}
+
+enum socks_response_status
+errno_to_socks(const int e) {
+    enum socks_response_status ret = status_general_SOCKS_server_failure;
+    switch (e) {
+        case 0:
+            ret = status_succeeded;
+            break;
+        case ECONNREFUSED:
+            ret = status_connection_refused;
+            break;
+        case EHOSTUNREACH:
+            ret = status_host_unreachable;
+            break;
+        case ENETUNREACH:
+            ret = status_network_unreachable;
+            break;
+        case ETIMEDOUT:
+            ret = status_ttl_expired;
+            break;
+    }
+    return ret;
 }

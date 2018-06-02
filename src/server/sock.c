@@ -1,4 +1,11 @@
+#include <stdio.h>
+#include <unistd.h>
 
+#include "request.h"
+#include "buffer.h"
+
+
+#define N(x) (sizeof(x)/sizeof((x)[0]))
 
 static bool
 read_request(const int fd, struct request *request) {
@@ -18,7 +25,7 @@ read_request(const int fd, struct request *request) {
         n = recv(fd, ptr, buffsize, 0);
         if(n > 0) {
             buffer_write_adv(&buffer, n);
-            const enum request_state st = request_consume(&buffer,
+            request_state_t st = request_consume(&buffer,
                         &request_parser, &error);
             if(request_is_done(st, &error)) {
                 break;

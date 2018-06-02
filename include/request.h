@@ -20,12 +20,35 @@ typedef enum {
     CONNECT
 } method_t;
 
+union socks_addr {
+    char fqdn[0xff];
+    struct sockaddr_in  ipv4;
+    struct sockaddr_in6 ipv6;
+};
+
 struct request {
     method_t method;
+    char * body;
+
+    union socks_addr      dest_addr;
+    /** port in network byte order */
+    in_port_t             dest_port;
     char * host;
 };
 
-enum request_state{
+enum socks_response_status {
+    status_succeeded                          = 0x00,
+    status_general_SOCKS_server_failure       = 0x01,
+    status_connection_not_allowed_by_ruleset  = 0x02,
+    status_network_unreachable                = 0x03,
+    status_host_unreachable                   = 0x04,
+    status_connection_refused                 = 0x05,
+    status_ttl_expired                        = 0x06,
+    status_command_not_supported              = 0x07,
+    status_address_type_not_supported         = 0x08,
+};
+
+typedef enum request_state{
    request_method,
    request_host,
    request_headers,
@@ -37,7 +60,7 @@ enum request_state{
 
    // y apartir de aca son considerado con error
    request_error
-};
+} request_state_t;
 
 struct request_parser {
    struct request *request;
@@ -73,7 +96,7 @@ void
 request_parser_init (struct request_parser *p);
 
 /** entrega un byte al parser. retorna true si se llego al final  */
-enum request_state
+request_state_t
 request_parser_feed (struct request_parser *p, const uint8_t c);
 
 /**
@@ -83,7 +106,7 @@ request_parser_feed (struct request_parser *p, const uint8_t c);
  * @param errored parametro de salida. si es diferente de NULL se deja dicho
  *   si el parsing se debió a una condición de error
  */
-enum request_state
+request_state_t
 request_consume(buffer *b, struct request_parser *p, bool *errored);
 
 /**
@@ -93,7 +116,10 @@ request_consume(buffer *b, struct request_parser *p, bool *errored);
  * En caso de haber terminado permite tambien saber si se debe a un error
  */
 bool
-request_is_done(const enum request_state st, bool *errored);
+request_is_done(const request_state_t st, bool *errored);
+
+enum socks_response_status
+errno_to_socks(int e);
 
 void
 request_close(struct request_parser *p);

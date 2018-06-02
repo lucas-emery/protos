@@ -12,6 +12,11 @@
 #include <netinet/tcp.h>
 
 #include "selector.h"
+#include "passive.h"
+#include "request.h"
+#include "netutils.h"
+
+#define N(x) (sizeof(x)/sizeof((x)[0]))
 
 #define PORT 8090
 #define LISTEN 30
@@ -21,6 +26,27 @@ static bool done = false;
 static void sigterm_handler(const int signal){
     printf("Signal %d, graceful exit\n", signal);
     done = true;
+}
+
+void
+log_request(const enum socks_response_status status,
+            const struct sockaddr* clientaddr,
+            const struct sockaddr* originaddr) {
+    char cbuff[SOCKADDR_TO_HUMAN_MIN * 2 + 2 + 32] = { 0 };
+    unsigned n = N(cbuff);
+    time_t now = 0;
+    time(&now);
+
+    // tendriamos que usar gmtime_r pero no está disponible en C99
+    strftime(cbuff, n, "%FT%TZ\t", gmtime(&now));
+    size_t len = strlen(cbuff);
+    sockaddr_to_human(cbuff + len, N(cbuff) - len, clientaddr);
+    strncat(cbuff, "\t", n-1);
+    cbuff[n-1] = 0;
+    len = strlen(cbuff);
+    sockaddr_to_human(cbuff + len, N(cbuff) - len, originaddr);
+
+    fprintf(stdout, "%s\tstatus=%d\n", cbuff, status);
 }
 
 int main(const int argc, const char **argv){
@@ -75,11 +101,13 @@ int main(const int argc, const char **argv){
         DieWithUserMessage("ded", "creating selector");
     }
     const struct fd_handler socksv5 = {
-        .handle_read = socksv5_passive_accept,
+        .handle_read = socks_passive_accept,
         .handle_write = NULL,
         .handle_close = NULL,
     };
     ss = selector_register(selector, mSocket, &socksv5, OP_READ, NULL);
+
+    printf("registered\n");
 
     if(ss != SELECTOR_SUCCESS){
         DieWithUserMessage("ded", "registering master socket fd");

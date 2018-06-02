@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 
 #include "netutils.h"
+#include "selector.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -98,4 +99,3 @@ sock_blocking_copy(const int source, const int dest) {
 
     return ret;
 }
-
