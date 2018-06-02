@@ -27,7 +27,7 @@ read_request(const int fd, struct request *request) {
             buffer_write_adv(&buffer, n);
             request_state_t st = request_consume(&buffer,
                         &request_parser, &error);
-            if(request_is_done(st, &error)) {
+            if(request_is_done(&request_parser, st, &error)) {
                 break;
             }
 
@@ -35,7 +35,7 @@ read_request(const int fd, struct request *request) {
             break;
         }
     }while(true);
-    if(!request_is_done(request_parser.state, &error)) {
+    if(!request_is_done(&request_parser, request_parser.state, &error)) {
         error = true;
     }
     request_close(&request_parser);

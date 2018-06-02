@@ -13,6 +13,21 @@
 
 #include "lib.h"
 
+typedef enum request_state{
+    request_method,
+    request_headers,
+    request_desired_header,
+    request_host,
+    request_enter,
+    request_body,
+
+    // apartir de aca están done
+    request_done,
+
+    // y apartir de aca son considerado con error
+    request_error
+} request_state_t;
+
 typedef enum {
     GET,
     POST,
@@ -36,43 +51,19 @@ struct request {
     char * host;
 };
 
-enum socks_response_status {
-    status_succeeded                          = 0x00,
-    status_general_SOCKS_server_failure       = 0x01,
-    status_connection_not_allowed_by_ruleset  = 0x02,
-    status_network_unreachable                = 0x03,
-    status_host_unreachable                   = 0x04,
-    status_connection_refused                 = 0x05,
-    status_ttl_expired                        = 0x06,
-    status_command_not_supported              = 0x07,
-    status_address_type_not_supported         = 0x08,
-};
-
-typedef enum request_state{
-   request_method,
-   request_host,
-   request_headers,
-   request_enter,
-   request_body,
-
-   // apartir de aca están done
-   request_done,
-
-   // y apartir de aca son considerado con error
-   request_error
-} request_state_t;
-
 struct request_parser {
    struct request *request;
-   enum request_state state;
+   request_state_t state;
    /** cuantos bytes tenemos que leer*/
    uint8_t n;
    /** cuantos bytes ya leimos */
    uint8_t i;
    /**cuantos bytes quedan por leer de una seleccion*/
-   uint8_t remaining;
-   /**buffer auxiliar*/
    char* buffer;
+    union socks_addr      dest_addr;
+    /** port in network byte order */
+    in_port_t             dest_port;
+    char * host;
 };
 
 /*
@@ -86,10 +77,20 @@ struct request_parser {
  * ..."-- sección 6
  *
  */
+enum socks_response_status {
+    status_succeeded                          = 0x00,
+    status_general_SOCKS_server_failure       = 0x01,
+    status_connection_not_allowed_by_ruleset  = 0x02,
+    status_network_unreachable                = 0x03,
+    status_host_unreachable                   = 0x04,
+    status_connection_refused                 = 0x05,
+    status_ttl_expired                        = 0x06,
+    status_command_not_supported              = 0x07,
+    status_address_type_not_supported         = 0x08,
+};
 
-
- void
- request_log();
+void
+request_log();
 
 /** inicializa el parser */
 void
@@ -116,7 +117,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored);
  * En caso de haber terminado permite tambien saber si se debe a un error
  */
 bool
-request_is_done(const request_state_t st, bool *errored);
+request_is_done(struct request_parser *p, const request_state_t st, bool *errored);
 
 enum socks_response_status
 errno_to_socks(int e);

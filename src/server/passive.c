@@ -412,7 +412,7 @@ request_read(struct selector_key *key) {
     if(n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
-        if(request_is_done(st, 0)) {
+        if(request_is_done( &d->parser, st, 0)) {
              ret = request_resolv(key, d);
         }
     } else {
@@ -428,6 +428,7 @@ request_resolv_blocking(void *data) {
     sock_t       *s   = ATTACHMENT(key);
 
     printf("DNS\n");
+
 
 
     pthread_detach(pthread_self());
@@ -446,12 +447,15 @@ request_resolv_blocking(void *data) {
     snprintf(buff, sizeof(buff), "%d",
              ntohs(s->client.request.request.dest_port));
 
+
+
     getaddrinfo(s->client.request.request.host, buff, &hints,
                &s->origin_resolution);
 
     selector_notify_block(key->s, key->fd);
 
     free(data);
+    printf("LALALALLA\n");
 
     return 0;
 }
