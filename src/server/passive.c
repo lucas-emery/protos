@@ -413,7 +413,7 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
         if(request_is_done(st, 0)) {
-            request_resolv(key, d);
+             ret = request_resolv(key, d);
         }
     } else {
         ret = ERROR;
