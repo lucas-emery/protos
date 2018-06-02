@@ -31,7 +31,6 @@ void
 request_parser_init (struct request_parser *p) {
     p->state = request_method;
     //p->request = malloc(sizeof( *(p->request) ));
-    printf("init: %p\n", p->request);
     memset(p->request, 0, sizeof(*(p->request)));
     p->request->host = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);

@@ -270,10 +270,10 @@ finally:
 
 static void sock_destroy(sock_t* s) {
     if(s->origin_resolution != NULL) {
-        freeaddrinfo(s->origin_resolution);
+        //freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
-    free(s);
+    //free(s);
 }
 
 static void sock_read(struct selector_key *key);
@@ -316,7 +316,6 @@ void socks_passive_accept(struct selector_key *key){
         goto fail;
     }
 
-    printf("registerd client\n");
     return;
 
 
@@ -388,7 +387,6 @@ request_init(const unsigned state, struct selector_key *key) {
     d->rb              = &(ATTACHMENT(key)->read_buffer);
     d->wb              = &(ATTACHMENT(key)->write_buffer);
     d->parser.request  = &d->request;
-    printf("first: %p\n", ATTACHMENT(key)->client.request.request);
     d->status          = status_general_SOCKS_server_failure;
     request_parser_init(&d->parser);
     d->client_fd       = &ATTACHMENT(key)->client_fd;
@@ -410,7 +408,6 @@ request_read(struct selector_key *key) {
       size_t  count;
      ssize_t  n;
 
-     printf("calling request_read\n");
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
     if(n > 0) {
@@ -431,10 +428,6 @@ request_resolv_blocking(void *data) {
     struct selector_key *key = (struct selector_key *) data;
     sock_t       *s   = ATTACHMENT(key);
 
-    printf("DNS %p\n", s->client.request);
-
-
-
     pthread_detach(pthread_self());
     s->origin_resolution = 0;
     struct addrinfo hints = {
@@ -450,8 +443,6 @@ request_resolv_blocking(void *data) {
     char buff[7];
     snprintf(buff, sizeof(buff), "%d",
              ntohs(s->client.request.request.dest_port));
-
-    printf("resolv: %p\n", s->client.request);
 
     getaddrinfo(s->client.request.request.host, buff, &hints,&s->origin_resolution);
 
@@ -473,7 +464,6 @@ request_resolv(struct selector_key * key, request_st * d) {
         d->status = status_general_SOCKS_server_failure;
         selector_set_interest_key(key, OP_WRITE);
     } else {
-        printf("client pointer of both selectors: %p\n", ATTACHMENT(key)->client.request);
         memcpy(k, key, sizeof(*k));
         if(-1 == pthread_create(&tid, 0,
                         request_resolv_blocking, k)) {
@@ -493,6 +483,7 @@ request_resolv_done(struct selector_key *key) {
     request_st * d = &ATTACHMENT(key)->client.request;
     sock_t *s      =  ATTACHMENT(key);
 
+
     if(s->origin_resolution == 0) {
         d->status = status_general_SOCKS_server_failure;
     } else {
@@ -501,7 +492,7 @@ request_resolv_done(struct selector_key *key) {
         memcpy(&s->origin_addr,
                 s->origin_resolution->ai_addr,
                 s->origin_resolution->ai_addrlen);
-        freeaddrinfo(s->origin_resolution);
+        //freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
 
@@ -544,6 +535,7 @@ request_connecting(struct selector_key *key) {
             *d->status = errno_to_socks(error);
         }
     }
+
     /*
     if(-1 == request_marshall(d->wb, *d->status)) {
         *d->status = status_general_SOCKS_server_failure;
@@ -553,6 +545,7 @@ request_connecting(struct selector_key *key) {
     selector_status s = 0;
     s |= selector_set_interest    (key->s, *d->client_fd, OP_WRITE);
     s |= selector_set_interest_key(key,                   OP_NOOP);
+
     return SELECTOR_SUCCESS == s ? REQUEST_WRITE : ERROR;
 }
 
@@ -567,6 +560,7 @@ request_write(struct selector_key *key) {
      ssize_t  n;
 
     ptr = buffer_read_ptr(b, &count);
+    printf("REQUEST:\n %s\n", ptr);
     n = send(key->fd, ptr, count, MSG_NOSIGNAL);
     if(n == -1) {
         ret = ERROR;
@@ -588,8 +582,9 @@ request_write(struct selector_key *key) {
         }
     }
 
-    log_request(d->status, (const struct sockaddr *)&ATTACHMENT(key)->client_addr,
-                           (const struct sockaddr *)&ATTACHMENT(key)->origin_addr);
+    //log_request(d->status, (const struct sockaddr *)&ATTACHMENT(key)->client_addr,
+    //                       (const struct sockaddr *)&ATTACHMENT(key)->origin_addr);
+
     return ret;
 }
 
@@ -609,6 +604,9 @@ copy_init(const unsigned state, struct selector_key *key) {
     d->wb       = &ATTACHMENT(key)->read_buffer;
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->client.copy;
+
+
+        printf("COPY_INIT\n");
 }
 
 /**
@@ -648,6 +646,7 @@ copy_ptr(struct selector_key *key) {
 static unsigned
 copy_r(struct selector_key *key) {
     struct copy * d = copy_ptr(key);
+        printf("COPY_R\n");
 
     assert(*d->fd == key->fd);
 
@@ -733,6 +732,8 @@ request_connect(struct selector_key *key, request_st *d) {
                 error = true;
                 goto finally;
             }
+
+            printf("CONNECTED PIPI\n");
 
             // esperamos la conexion en el nuevo socket
             st = selector_register(key->s, *fd, &socks_handler,
