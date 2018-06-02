@@ -174,6 +174,71 @@ typedef struct {
 
 #define ATTACHMENT(key) ( (sock_t *)(key)->data)
 
+static void
+request_read_close(const unsigned state, struct selector_key *key);
+
+static void
+request_init(const unsigned state, struct selector_key *key);
+
+static unsigned
+request_read(struct selector_key *key);
+
+static unsigned
+request_resolv(struct selector_key * key, request_st * d);
+
+static unsigned
+request_resolv_done(struct selector_key *key);
+
+static void
+request_connecting_init(const unsigned state, struct selector_key *key);
+
+static unsigned
+request_connecting(struct selector_key *key);
+
+static unsigned
+request_connect(struct selector_key *key, request_st *d);
+
+static unsigned
+request_write(struct selector_key *key);
+
+static void
+copy_init(const unsigned state, struct selector_key *key);
+
+static unsigned
+copy_r(struct selector_key *key);
+
+static unsigned
+copy_w(struct selector_key *key);
+
+static const struct state_definition client_statbl[] = {
+    {
+        .state            = REQUEST_READ,
+        .on_arrival       = request_init,
+        .on_departure     = request_read_close,
+        .on_read_ready    = request_read,
+    },{
+        .state            = REQUEST_RESOLV,
+        .on_block_ready   = request_resolv_done,
+    },{
+        .state            = REQUEST_CONNECTING,
+        .on_arrival       = request_connecting_init,
+        .on_write_ready   = request_connecting,
+    },{
+        .state            = REQUEST_WRITE,
+        .on_write_ready   = request_write,
+    },{
+        .state            = COPY,
+        .on_arrival       = copy_init,
+        .on_read_ready    = copy_r,
+        .on_write_ready   = copy_w,
+    },{
+        .state            = DONE,
+
+    },{
+        .state            = ERROR,
+    }
+};
+
 
 static const struct state_definition * sock_describe_states(void);
 
@@ -262,70 +327,7 @@ fail:
     sock_destroy(state);
 }
 
-static void
-request_read_close(const unsigned state, struct selector_key *key);
 
-static void
-request_init(const unsigned state, struct selector_key *key);
-
-static unsigned
-request_read(struct selector_key *key);
-
-static unsigned
-request_resolv(struct selector_key * key, request_st * d);
-
-static unsigned
-request_resolv_done(struct selector_key *key);
-
-static void
-request_connecting_init(const unsigned state, struct selector_key *key);
-
-static unsigned
-request_connecting(struct selector_key *key);
-
-static unsigned
-request_connect(struct selector_key *key, request_st *d);
-
-static unsigned
-request_write(struct selector_key *key);
-
-static void
-copy_init(const unsigned state, struct selector_key *key);
-
-static unsigned
-copy_r(struct selector_key *key);
-
-static unsigned
-copy_w(struct selector_key *key);
-
-static const struct state_definition client_statbl[] = {
-    {
-        .state            = REQUEST_READ,
-        .on_arrival       = request_init,
-        .on_departure     = request_read_close,
-        .on_read_ready    = request_read,
-    },{
-        .state            = REQUEST_RESOLV,
-        .on_block_ready   = request_resolv_done,
-    },{
-        .state            = REQUEST_CONNECTING,
-        .on_arrival       = request_connecting_init,
-        .on_write_ready   = request_connecting,
-    },{
-        .state            = REQUEST_WRITE,
-        .on_write_ready   = request_write,
-    },{
-        .state            = COPY,
-        .on_arrival       = copy_init,
-        .on_read_ready    = copy_r,
-        .on_write_ready   = copy_w,
-    },{
-        .state            = DONE,
-
-    },{
-        .state            = ERROR,
-    }
-};
 
 static const struct state_definition * sock_describe_states(void) {
     return client_statbl;
@@ -386,6 +388,7 @@ request_init(const unsigned state, struct selector_key *key) {
     d->rb              = &(ATTACHMENT(key)->read_buffer);
     d->wb              = &(ATTACHMENT(key)->write_buffer);
     d->parser.request  = &d->request;
+    printf("first: %p\n", ATTACHMENT(key)->client.request.request);
     d->status          = status_general_SOCKS_server_failure;
     request_parser_init(&d->parser);
     d->client_fd       = &ATTACHMENT(key)->client_fd;
@@ -407,6 +410,7 @@ request_read(struct selector_key *key) {
       size_t  count;
      ssize_t  n;
 
+     printf("calling request_read\n");
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
     if(n > 0) {
@@ -427,7 +431,7 @@ request_resolv_blocking(void *data) {
     struct selector_key *key = (struct selector_key *) data;
     sock_t       *s   = ATTACHMENT(key);
 
-    printf("DNS\n");
+    printf("DNS %p\n", s->client.request);
 
 
 
@@ -447,15 +451,13 @@ request_resolv_blocking(void *data) {
     snprintf(buff, sizeof(buff), "%d",
              ntohs(s->client.request.request.dest_port));
 
+    printf("resolv: %p\n", s->client.request);
 
-
-    getaddrinfo(s->client.request.request.host, buff, &hints,
-               &s->origin_resolution);
+    getaddrinfo(s->client.request.request.host, buff, &hints,&s->origin_resolution);
 
     selector_notify_block(key->s, key->fd);
 
     free(data);
-    printf("LALALALLA\n");
 
     return 0;
 }
@@ -471,6 +473,7 @@ request_resolv(struct selector_key * key, request_st * d) {
         d->status = status_general_SOCKS_server_failure;
         selector_set_interest_key(key, OP_WRITE);
     } else {
+        printf("client pointer of both selectors: %p\n", ATTACHMENT(key)->client.request);
         memcpy(k, key, sizeof(*k));
         if(-1 == pthread_create(&tid, 0,
                         request_resolv_blocking, k)) {

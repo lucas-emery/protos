@@ -9,4 +9,4 @@ client:
 
 clean:
 	$(MAKE) clean -C src
-	rm server client
+	rm server

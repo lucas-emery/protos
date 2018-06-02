@@ -30,7 +30,9 @@ request_log() {
 void
 request_parser_init (struct request_parser *p) {
     p->state = request_method;
-    p->request = malloc(sizeof( *(p->request) ));
+    //p->request = malloc(sizeof( *(p->request) ));
+    printf("init: %p\n", p->request);
+    memset(p->request, 0, sizeof(*(p->request)));
     p->request->host = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);
 }
@@ -41,12 +43,13 @@ request_consume(buffer *b, struct request_parser *p, bool *errored) {
 
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
+       printf("%c",c);
        st = request_parser_feed(p, c);
        if(request_is_done(p, st, errored)) {
           break;
        }
     }
-
+    printf("\n");
     return st;
 }
 
