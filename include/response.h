@@ -50,6 +50,7 @@ struct response_parser {
    uint8_t i;
    /**buffer auxiliar*/
 
+   uint8_t body_count;
    uint8_t chunk_number;
    char* buffer;
 };
