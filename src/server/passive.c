@@ -388,6 +388,7 @@ request_init(const unsigned state, struct selector_key *key) {
     d->wb              = &(ATTACHMENT(key)->write_buffer);
     d->parser.request  = &d->request;
     d->status          = status_general_SOCKS_server_failure;
+    //d->request.dest_port = htons(80);
     request_parser_init(&d->parser);
     d->client_fd       = &ATTACHMENT(key)->client_fd;
     d->origin_fd       = &ATTACHMENT(key)->origin_fd;
@@ -492,7 +493,7 @@ request_resolv_done(struct selector_key *key) {
         memcpy(&s->origin_addr,
                 s->origin_resolution->ai_addr,
                 s->origin_resolution->ai_addrlen);
-        //freeaddrinfo(s->origin_resolution);
+        freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
 
@@ -502,8 +503,6 @@ request_resolv_done(struct selector_key *key) {
 static void
 request_read_close(const unsigned state, struct selector_key *key) {
     request_st * d = &ATTACHMENT(key)->client.request;
-
-    printf("finished reading\n");
 
     request_close(&d->parser);
 }
@@ -552,6 +551,7 @@ request_connecting(struct selector_key *key) {
 static unsigned
 request_write(struct selector_key *key) {
     request_st * d = &ATTACHMENT(key)->client.request;
+    sock_t * s = ATTACHMENT(key);
 
     unsigned  ret       = REQUEST_WRITE;
       buffer *b         = d->wb;
@@ -559,9 +559,7 @@ request_write(struct selector_key *key) {
       size_t  count;
      ssize_t  n;
 
-    ptr = buffer_read_ptr(b, &count);
-    printf("REQUEST:\n %s\n", ptr);
-    n = send(key->fd, ptr, count, MSG_NOSIGNAL);
+    n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
     if(n == -1) {
         ret = ERROR;
     } else {
@@ -605,8 +603,6 @@ copy_init(const unsigned state, struct selector_key *key) {
     d->duplex   = OP_READ | OP_WRITE;
     d->other    = &ATTACHMENT(key)->client.copy;
 
-
-        printf("COPY_INIT\n");
 }
 
 /**
@@ -646,7 +642,6 @@ copy_ptr(struct selector_key *key) {
 static unsigned
 copy_r(struct selector_key *key) {
     struct copy * d = copy_ptr(key);
-        printf("COPY_R\n");
 
     assert(*d->fd == key->fd);
 
@@ -721,7 +716,9 @@ request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    if (-1 == connect(*fd, (const struct sockaddr *)&ATTACHMENT(key)->origin_addr,
+    struct sockaddr_in * originaddr = (struct sockaddr_in *)&ATTACHMENT(key)->origin_addr;
+    originaddr->sin_port = htons(80);
+    if (-1 == connect(*fd, (struct sockaddr_in *)&ATTACHMENT(key)->origin_addr,
                            ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
             // es esperable,  tenemos que esperar a la conexión
@@ -733,7 +730,6 @@ request_connect(struct selector_key *key, request_st *d) {
                 goto finally;
             }
 
-            printf("CONNECTED PIPI\n");
 
             // esperamos la conexion en el nuevo socket
             st = selector_register(key->s, *fd, &socks_handler,

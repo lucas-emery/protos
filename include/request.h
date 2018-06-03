@@ -43,6 +43,8 @@ union socks_addr {
 
 struct request {
     method_t method;
+    char * request;
+    int length;
     char * body;
 
     union socks_addr      dest_addr;
