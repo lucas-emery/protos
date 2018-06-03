@@ -21,6 +21,9 @@ enter(const uint8_t c, struct response_parser* p);
 static enum response_state
 body(const uint8_t c, struct response_parser* p);
 
+static enum response_state
+chunk_length(const uint8_t c, struct response_parser* p);
+
 extern enum response_state
 response_consume(buffer *b, struct response_parser *p, bool *errored) {
     enum response_state st = p->state;
@@ -46,6 +49,7 @@ response_parser_init (struct response_parser *p) {
     p->response->chunked = FALSE;
     p->response->body = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);
+    p->chunk_number = FALSE;
 }
 
 void
@@ -98,6 +102,9 @@ response_parser_feed (struct response_parser *p, const uint8_t c) {
         case response_enter:
             next = enter(c, p);
             break;
+        case response_chunk_length:
+            next = chunk_length(c, p);
+            break;
         case response_done:
         case response_error:
         default:
@@ -129,18 +136,36 @@ enter(const uint8_t c, struct response_parser* p) {
         case '\n':
             p->buffer[p->i++] = c;
             if(strcmp(p->buffer, "\r\n\r\n") == 0) {
+                p->body_count = 0;
                 response_reset_buffer(p);
-                next = response_body;
+                if(p->response->chunked) {
+                    if(p->response->body[0] == 0)
+                        next = response_chunk_length;
+                    else
+                        next = response_done;
+                }
+                else
+                    next = response_body;
             }
         break;
         case '\r':
             p->buffer[p->i++] = c;
         break;
         default:
-            response_reset_buffer(p);
             if(c == 'T' || c == 'C') {
+                response_reset_buffer(p);
                 p->buffer[p->i++] = c;
                 next = response_desired_header;
+            } else if(p->response->chunked) {
+                if(p->chunk_number) {
+                    next = response_chunk_length;
+                    p->chunk_number = FALSE;
+                }
+                else {
+                    p->chunk_number = TRUE;
+                    p->response->body[p->body_count++] = c;
+                    next = response_body;
+                }
             } else
                 next = response_headers;
         break;
@@ -223,17 +248,36 @@ encoding(const uint8_t c, struct response_parser* p) {
     return next;
 }
 
+
+static enum response_state
+chunk_length(const uint8_t c, struct response_parser* p) {
+    enum response_state next = response_chunk_length;
+
+
+    if(c == '\r') {
+        response_reset_buffer(p);
+        p->buffer[p->i++] = c;
+        next = response_enter;
+    }
+
+    return next;
+}
+
 static enum response_state
 body(const uint8_t c, struct response_parser* p) {
     enum response_state next = response_body;
 
      if(c == '\r') {
-         p->response->body[p->i] = 0;
-         next = response_done;
-     } else
-        p->response->body[p->i++] = c;
+         p->response->body[p->body_count] = 0;
 
-    //TODO chunked
+         if(p->response->chunked) {
+             response_reset_buffer(p);
+             p->buffer[p->i++] = c;
+             next = response_enter;
+         } else
+            next = response_done;
+     } else
+        p->response->body[p->body_count++] = c;
 
     return next;
 }

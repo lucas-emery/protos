@@ -32,6 +32,7 @@ enum response_state{
     response_encoding,
     response_enter,
     response_body,
+    response_chunk_length,
 
     // apartir de aca están done
     response_done,
@@ -48,6 +49,8 @@ struct response_parser {
    /** cuantos bytes ya leimos */
    uint8_t i;
    /**buffer auxiliar*/
+
+   uint8_t chunk_number;
    char* buffer;
 };
 
