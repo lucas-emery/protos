@@ -121,18 +121,6 @@ struct connecting {
     enum socks_response_status *status;
 };
 
-/** usado por COPY */
-struct copy {
-    /** el otro file descriptor */
-    int         *fd;
-    /** el buffer que se utiliza para hacer la copia */
-    buffer      *rb, *wb;
-    /** ¿cerramos ya la escritura o la lectura? */
-    fd_interest duplex;
-
-    struct copy *other;
-};
-
 typedef struct {
     /** información del cliente */
     struct sockaddr_storage       client_addr;
@@ -141,8 +129,6 @@ typedef struct {
 
     /** resolución de la dirección del origin server */
     struct addrinfo              *origin_resolution;
-    /** intento actual de la dirección del origin server */
-    struct addrinfo              *origin_resolution_current;
 
     /** información del origin server */
     struct sockaddr_storage       origin_addr;
@@ -157,22 +143,27 @@ typedef struct {
     /** estados para el client_fd */
     union {
         request_st         request;
-        struct copy               copy;
     } client;
     /** estados para el origin_fd */
     union {
         struct connecting         conn;
-        struct copy               copy;
     } orig;
 
     /** buffers para ser usados read_buffer, write_buffer.*/
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     buffer read_buffer, write_buffer;
 
-} sock_t;
+} client_t;
+
+typedef struct {
+    int origin_fd;
+    int client_fd;
+
+    struct state_machine stm;
+} origin_t;
 
 
-#define ATTACHMENT(key) ( (sock_t *)(key)->data)
+#define ATTACHMENT(key) ( (client_t *)(key)->data)
 
 static void
 request_read_close(const unsigned state, struct selector_key *key);
@@ -201,14 +192,25 @@ request_connect(struct selector_key *key, request_st *d);
 static unsigned
 request_write(struct selector_key *key);
 
-static void
-copy_init(const unsigned state, struct selector_key *key);
+static const struct state_definition origin_statbl[] = {
+    {
+        .state            = RESPONSE_READ,
+        .on_arrival       = response_init,              //TODO
+        .on_departure     = response_read_close,        //TODO
+        .on_read_ready    = response_read,              //TODO
+    },{
+        .state            = RESPONSE_TRANSFORM,
+        .on_block_ready   = response_transform_done,    //TODO
+    },{
+        .state            = RESPONSE_WRITE,
+        .on_write_ready   = response_write,             //TODO
+    },{
+        .state            = DONE,
 
-static unsigned
-copy_r(struct selector_key *key);
-
-static unsigned
-copy_w(struct selector_key *key);
+    },{
+        .state            = ERROR,
+    }
+};
 
 static const struct state_definition client_statbl[] = {
     {
@@ -227,11 +229,6 @@ static const struct state_definition client_statbl[] = {
         .state            = REQUEST_WRITE,
         .on_write_ready   = request_write,
     },{
-        .state            = COPY,
-        .on_arrival       = copy_init,
-        .on_read_ready    = copy_r,
-        .on_write_ready   = copy_w,
-    },{
         .state            = DONE,
 
     },{
@@ -239,11 +236,37 @@ static const struct state_definition client_statbl[] = {
     }
 };
 
+static const struct state_definition * origin_describe_states(void){
+    return origin_statbl;
+}
 
-static const struct state_definition * sock_describe_states(void);
+static const struct state_definition * client_describe_states(void) {
+    return client_statbl;
+}
 
-static sock_t * sock_new(int client_fd) {
-    sock_t *ret;
+static origin_t * origin_new(int origin_fd, int client_fd) {
+    origin_t * ret;
+
+    ret = malloc(sizeof(*ret));
+
+    if(ret == NULL) {
+        return NULL;
+    }
+    memset(ret, 0x00, sizeof(*ret));
+
+    ret->origin_fd = origin_fd;
+    ret->client_fd = client_fd;
+
+    ret->stm.initial = RESPONSE_READ;
+    ret->stm.max_state = ERROR;
+    ret->stm.states = origin_describe_states();
+    stm_init(&ret->stm);
+
+    return ret;
+}
+
+static client_t * client_new(int client_fd) {
+    client_t *ret;
 
     ret = malloc(sizeof(*ret));
 
@@ -258,7 +281,7 @@ static sock_t * sock_new(int client_fd) {
 
     ret->stm    .initial   = REQUEST_READ;
     ret->stm    .max_state = ERROR;
-    ret->stm    .states    = sock_describe_states();
+    ret->stm    .states    = client_describe_states();
     stm_init(&ret->stm);
 
     buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
@@ -268,7 +291,7 @@ finally:
     return ret;
 }
 
-static void sock_destroy(sock_t* s) {
+static void sock_destroy(client_t* s) {
     if(s->origin_resolution != NULL) {
         //freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
@@ -292,7 +315,7 @@ void socks_passive_accept(struct selector_key *key){
     struct sockaddr_storage client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
 
-    sock_t * state = NULL;
+    client_t * state = NULL;
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
 
@@ -304,7 +327,7 @@ void socks_passive_accept(struct selector_key *key){
         return;
     }
 
-    state = sock_new(client);
+    state = client_new(client);
     if(state == NULL){
         goto fail;
     }
@@ -324,12 +347,6 @@ fail:
         close(client);
     }
     sock_destroy(state);
-}
-
-
-
-static const struct state_definition * sock_describe_states(void) {
-    return client_statbl;
 }
 
 static void sock_done(struct selector_key* key);
@@ -427,7 +444,7 @@ request_read(struct selector_key *key) {
 static void *
 request_resolv_blocking(void *data) {
     struct selector_key *key = (struct selector_key *) data;
-    sock_t       *s   = ATTACHMENT(key);
+    client_t       *s   = ATTACHMENT(key);
 
     pthread_detach(pthread_self());
     s->origin_resolution = 0;
@@ -482,7 +499,7 @@ request_resolv(struct selector_key * key, request_st * d) {
 static unsigned
 request_resolv_done(struct selector_key *key) {
     request_st * d = &ATTACHMENT(key)->client.request;
-    sock_t *s      =  ATTACHMENT(key);
+    client_t *s      =  ATTACHMENT(key);
 
 
     if(s->origin_resolution == 0) {
@@ -551,7 +568,7 @@ request_connecting(struct selector_key *key) {
 static unsigned
 request_write(struct selector_key *key) {
     request_st * d = &ATTACHMENT(key)->client.request;
-    sock_t * s = ATTACHMENT(key);
+    client_t * s = ATTACHMENT(key);
 
     unsigned  ret       = REQUEST_WRITE;
       buffer *b         = d->wb;
@@ -567,7 +584,7 @@ request_write(struct selector_key *key) {
 
         if(!buffer_can_read(b)) {
             if(d->status == status_succeeded) {
-                ret = COPY;
+                ret = REQUEST_READ;
                 selector_set_interest    (key->s,  *d->client_fd, OP_READ);
                 selector_set_interest    (key->s,  *d->origin_fd, OP_READ);
             } else {
@@ -583,121 +600,6 @@ request_write(struct selector_key *key) {
     //log_request(d->status, (const struct sockaddr *)&ATTACHMENT(key)->client_addr,
     //                       (const struct sockaddr *)&ATTACHMENT(key)->origin_addr);
 
-    return ret;
-}
-
-static void
-copy_init(const unsigned state, struct selector_key *key) {
-    struct copy * d = &ATTACHMENT(key)->client.copy;
-
-    d->fd        = &ATTACHMENT(key)->client_fd;
-    d->rb        = &ATTACHMENT(key)->read_buffer;
-    d->wb        = &ATTACHMENT(key)->write_buffer;
-    d->duplex    = OP_READ | OP_WRITE;
-    d->other     = &ATTACHMENT(key)->orig.copy;
-
-    d = &ATTACHMENT(key)->orig.copy;
-    d->fd       = &ATTACHMENT(key)->origin_fd;
-    d->rb       = &ATTACHMENT(key)->write_buffer;
-    d->wb       = &ATTACHMENT(key)->read_buffer;
-    d->duplex   = OP_READ | OP_WRITE;
-    d->other    = &ATTACHMENT(key)->client.copy;
-
-}
-
-/**
- * Computa los intereses en base a la disponiblidad de los buffer.
- * La variable duplex nos permite saber si alguna vía ya fue cerrada.
- * Arrancá OP_READ | OP_WRITE.
- */
-static fd_interest
-copy_compute_interests(fd_selector s, struct copy* d) {
-    fd_interest ret = OP_NOOP;
-    if ((d->duplex & OP_READ)  && buffer_can_write(d->rb)) {
-        ret |= OP_READ;
-    }
-    if ((d->duplex & OP_WRITE) && buffer_can_read (d->wb)) {
-        ret |= OP_WRITE;
-    }
-    if(SELECTOR_SUCCESS != selector_set_interest(s, *d->fd, ret)) {
-        abort();
-    }
-    return ret;
-}
-
-/** elige la estructura de copia correcta de cada fd (origin o client) */
-static struct copy *
-copy_ptr(struct selector_key *key) {
-    struct copy * d = &ATTACHMENT(key)->client.copy;
-
-    if(*d->fd == key->fd) {
-        // ok
-    } else {
-        d = d->other;
-    }
-    return  d;
-}
-
-/** lee bytes de un socket y los encola para ser escritos en otro socket */
-static unsigned
-copy_r(struct selector_key *key) {
-    struct copy * d = copy_ptr(key);
-
-    assert(*d->fd == key->fd);
-
-    size_t size;
-    ssize_t n;
-    buffer* b    = d->rb;
-    unsigned ret = COPY;
-
-    uint8_t *ptr = buffer_write_ptr(b, &size);
-    n = recv(key->fd, ptr, size, 0);
-    if(n <= 0) {
-        shutdown(*d->fd, SHUT_RD);
-        d->duplex &= ~OP_READ;
-        if(*d->other->fd != -1) {
-            shutdown(*d->other->fd, SHUT_WR);
-            d->other->duplex &= ~OP_WRITE;
-        }
-    } else {
-        buffer_write_adv(b, n);
-    }
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
-    if(d->duplex == OP_NOOP) {
-        ret = DONE;
-    }
-    return ret;
-}
-
-/** escribe bytes encolados */
-static unsigned
-copy_w(struct selector_key *key) {
-    struct copy * d = copy_ptr(key);
-
-    assert(*d->fd == key->fd);
-    size_t size;
-    ssize_t n;
-    buffer* b = d->wb;
-    unsigned ret = COPY;
-
-    uint8_t *ptr = buffer_read_ptr(b, &size);
-    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-    if(n == -1) {
-        shutdown(*d->fd, SHUT_WR);
-        d->duplex &= ~OP_WRITE;
-        if(*d->other->fd != -1) {
-            shutdown(*d->other->fd, SHUT_RD);
-            d->other->duplex &= ~OP_READ;
-        }
-    } else {
-        buffer_read_adv(b, n);
-    }
-    copy_compute_interests(key->s, d);
-    copy_compute_interests(key->s, d->other);
-    if(d->duplex == OP_NOOP) {
-        ret = DONE;
-    }
     return ret;
 }
 
@@ -730,10 +632,12 @@ request_connect(struct selector_key *key, request_st *d) {
                 goto finally;
             }
 
+            //TODO
+
 
             // esperamos la conexion en el nuevo socket
             st = selector_register(key->s, *fd, &socks_handler,
-                                      OP_WRITE, key->data);
+                                      OP_WRITE, key->data);         //TODO ultimo parametro deberia ser origin_t
             if(SELECTOR_SUCCESS != st) {
                 error = true;
                 goto finally;

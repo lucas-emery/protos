@@ -107,8 +107,6 @@ int main(const int argc, const char **argv){
     };
     ss = selector_register(selector, mSocket, &socksv5, OP_READ, NULL);
 
-    printf("registered\n");
-
     if(ss != SELECTOR_SUCCESS){
         DieWithUserMessage("ded", "registering master socket fd");
     }
