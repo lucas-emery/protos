@@ -39,7 +39,8 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
 void
 response_parser_init (struct response_parser *p) {
     p->state = response_headers;
-    p->response = malloc(sizeof( *(p->response) ));
+    memset(p->response, 0, sizeof(*(p->response)));
+    p->response->response = malloc(BUFF_SIZE);
     p->response->length = malloc(BUFF_SIZE);
     p->response->mediaType = malloc(BUFF_SIZE);
     p->response->chunked = FALSE;

@@ -16,6 +16,8 @@
 #define FALSE 0
 
 struct response {
+    char * response;
+
     char* length;
     char* mediaType;
     char* body;
