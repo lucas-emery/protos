@@ -20,6 +20,9 @@
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
 
+struct timeval sysTime;
+
+
 typedef enum {
 
     /**
@@ -121,6 +124,16 @@ typedef struct {
 
 } client_t;
 
+void startTime(){
+    gettimeofday(&sysTime, NULL);
+}
+
+void printDeltaTime(){
+    struct timeval stop;
+    gettimeofday(&stop, NULL);
+    printf("took %lu\n", stop.tv_usec - sysTime.tv_usec);
+}
+
 void request_connect(struct selector_key *key, request_st *d);
 
 #define CLIENT_ATTACHMENT(key) ( (client_t *)(key)->data)
@@ -217,8 +230,6 @@ void socks_passive_accept(struct selector_key *key){
     socklen_t client_addr_len = sizeof(client_addr);
 
     client_t * state = NULL;
-
-    printf("Registering client\n");
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
 
@@ -330,9 +341,20 @@ request_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
+    // if(strstr(ptr, "CONNECT") != NULL){
+    //     printf("sending 405\n");
+    //     send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
+    //     return ERROR;
+    // }
     if(n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
+        if(d->parser.request->method == CONNECT) {
+            printf("send 405\n");
+            int lala = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
+            printf("%d lalal\n", lala);
+            return ERROR;
+        }
         if(request_is_done( &d->parser, st, 0)) {
              ret = request_resolv(key, d);
         }
@@ -414,7 +436,6 @@ request_resolv_done(struct selector_key *key) {
         freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
-
     request_connect(key, d);
     selector_set_interest_key(key, OP_NOOP);
     return REQUEST_WRITE;
@@ -423,6 +444,7 @@ request_resolv_done(struct selector_key *key) {
 static void
 request_read_close(const unsigned state, struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
+
 
     request_close(&d->parser);
 }
@@ -434,7 +456,6 @@ request_write(struct selector_key *key) {
 
 
     int n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
-    printf("%d sent of %d\n", n, d->request.length);
     if(n == -1) {
         return ERROR;
     }

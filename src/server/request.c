@@ -34,6 +34,7 @@ request_parser_init (struct request_parser *p) {
     p->request->request = malloc(BUFF_SIZE);
     p->request->host = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);
+    p->i = 0;
 }
 
 extern request_state_t
@@ -109,6 +110,7 @@ method(const uint8_t c, struct request_parser* p) {
 
     if(c == ' ') {
         p->buffer[p->i] = 0;
+        // printf("%s\n", p->buffer);
 
         if(strcmp(p->buffer, "GET") == 0) {
             p->request->method = GET;
@@ -119,7 +121,7 @@ method(const uint8_t c, struct request_parser* p) {
         } else if(strcmp(p->buffer, "CONNECT") == 0) {
             p->request->method = CONNECT;
         } else {
-            next = request_error;
+            return request_error;
         }
 
         bzero(p->buffer, BUFF_SIZE);

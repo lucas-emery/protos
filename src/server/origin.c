@@ -21,6 +21,9 @@
 #define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
 #define CLIENT_ATTACHMENT(key) ( (client_t *)(key)->data)
 
+void startTime();
+void printDeltaTime();
+
 typedef enum {
     CONNECTING,
     HEADERS,
@@ -230,13 +233,13 @@ static void headers_init(const unsigned state, struct selector_key *key) {
     origin_t * o = (origin_t*) key->data;
     o->parser.response = &o->response;
     response_parser_init(&o->parser);
-    buffer_init(&o->buff, 4096, malloc(4096));
+    buffer_init(&o->buff, BUFF_SIZE, malloc(BUFF_SIZE));
     o->readFirst = false;
 }
 
 static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    size_t size = 4096;
+    size_t size = BUFF_SIZE;
     char * ptr = buffer_write_ptr(&o->buff,&size);
     int read = recv(o->origin_fd, ptr, size, 0);
 
@@ -270,11 +273,11 @@ static void headers_flush(const unsigned state, struct selector_key *key){
 }
 
 static unsigned copy(struct selector_key *key){
-        char buffer[4096];
+        char buffer[BUFF_SIZE];
         origin_t * o = (origin_t*) key->data;
         printf("copying from %d to %d\n", o->origin_fd, o->client_fd);
         int sent = 0;
-        int recvd = recv(o->origin_fd, buffer, 4096, 0);
+        int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
         if(recvd > 0){
             bool done;
             if(o->response.chunked){
@@ -289,10 +292,10 @@ static unsigned copy(struct selector_key *key){
 }
 
 static unsigned transform(struct selector_key *key){
-        char buffer[4096];
+        char buffer[BUFF_SIZE];
         origin_t * o = (origin_t*) key->data;
         int sent = 0;
-        int recvd = recv(o->origin_fd, buffer, 4096, 0);
+        int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
         if(read > 0){
             bool done;
             if(o->response.chunked){
