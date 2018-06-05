@@ -14,7 +14,8 @@
 
 #include "stm.h"
 #include "passive.h"
-#include"netutils.h"
+#include "netutils.h"
+#include "response.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -64,6 +65,7 @@ typedef enum {
      *   - ERROR        ante I/O error
      */
     REQUEST_WRITE,
+    WAITING,
 
     // estados terminales
     DONE,
@@ -133,6 +135,8 @@ static unsigned request_resolv_done(struct selector_key *key);
 
 static unsigned request_write(struct selector_key *key);
 
+static unsigned destroy(struct selector_key *key);
+
 static const struct state_definition client_statbl[] = {
     {
         .state            = REQUEST_READ,
@@ -145,6 +149,9 @@ static const struct state_definition client_statbl[] = {
     },{
         .state            = REQUEST_WRITE,
         .on_block_ready   = request_write,
+    },{
+        .state            = WAITING,
+        .on_block_ready   = destroy,
     },{
         .state            = DONE,
 
@@ -210,6 +217,8 @@ void socks_passive_accept(struct selector_key *key){
     socklen_t client_addr_len = sizeof(client_addr);
 
     client_t * state = NULL;
+
+    printf("Registering client\n");
 
     const int client = accept(key->fd, (struct sockaddr*) &client_addr, &client_addr_len);
 
@@ -310,7 +319,6 @@ request_init(const unsigned state, struct selector_key *key) {
 
 static unsigned
 request_read(struct selector_key *key) {
-    printf("in request read\n");
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
       buffer *b     = d->rb;
@@ -424,19 +432,21 @@ request_write(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t * s = CLIENT_ATTACHMENT(key);
 
-    unsigned  ret       = REQUEST_READ;
-      buffer *b         = d->wb;
-     uint8_t *ptr;
-      size_t  count;
-     ssize_t  n;
-
-    n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
+    int n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
     if(n == -1) {
-        ret = ERROR;
+        return ERROR;
     }
 
     //log_request(d->status, (const struct sockaddr *)&CLIENT_ATTACHMENT(key)->client_addr,
     //                       (const struct sockaddr *)&CLIENT_ATTACHMENT(key)->origin_addr);
-    selector_set_interest_key(key, OP_READ);
-    return ret;
+    return WAITING;
+}
+
+static unsigned
+destroy(struct selector_key *key){
+    client_t * c = CLIENT_ATTACHMENT(key);
+    printf("killing client\n");
+    selector_unregister_fd(key->s, key->fd);
+    close(key->fd);
+    return DONE;
 }

@@ -86,4 +86,10 @@ enum response_state
 response_consume(buffer *b, struct response_parser *p, bool *errored);
 
 bool
+body_is_done(char* buffer, int length);
+
+void
+parser_headers(struct response_parser *p, char* ptr);
+
+bool
 chunked_is_done(char* buffer, int length);

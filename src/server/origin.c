@@ -15,6 +15,7 @@
 #include "stm.h"
 #include "passive.h"
 #include "netutils.h"
+#include "response.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
@@ -22,9 +23,9 @@
 
 typedef enum {
     CONNECTING,
-    RESPONSE_READ,
-    RESPONSE_TRANSFORM,
-    RESPONSE_WRITE,
+    HEADERS,
+    TRANSFORM,
+    COPY,
     RESPONSE_DONE,
     RESPONSE_ERROR,
 } origin_state_t;
@@ -32,9 +33,10 @@ typedef enum {
 typedef struct {
     int origin_fd;
     int client_fd;
-
-    char * response;
-    uint8_t length;
+    buffer buff;
+    struct response response;
+    struct response_parser parser;
+    bool readFirst;
 
     struct state_machine stm;
 } origin_t;
@@ -90,36 +92,37 @@ typedef struct {
 
 static unsigned connected(struct selector_key *key);
 
-static void
-response_init(const unsigned state, struct selector_key *key);
+static void headers_init(const unsigned state, struct selector_key *key);
 
-//static unsigned
-//response_read_close(struct selector_key *key);
+static void headers_flush(const unsigned state, struct selector_key *key);
 
-static unsigned
-response_read(struct selector_key *key);
+static unsigned headers_read(struct selector_key *key);
 
-static unsigned
-response_write(const unsigned state, struct selector_key *key);
+static unsigned transform(struct selector_key *key);
+
+static unsigned copy(struct selector_key *key);
+
+static void destroy(const unsigned state, struct selector_key *key);
 
 static const struct state_definition origin_statbl[] = {
     {
         .state            = CONNECTING,
         .on_write_ready   = connected,
     },{
-        .state            = RESPONSE_READ,
-        .on_arrival       = response_init,              //TODO
-    //    .on_departure     = response_read_close,        //TODO
-        .on_read_ready    = response_read,              //TODO
+        .state            = HEADERS,
+        .on_arrival       = headers_init,              //TODO
+        .on_read_ready    = headers_read,              //TODO
+        .on_departure     = headers_flush
     },{
-        .state            = RESPONSE_TRANSFORM,
+        .on_read_ready    = transform,
+        .state            = TRANSFORM,
     //    .on_block_ready   = response_transform_done,    //TODO
     },{
-        .state            = RESPONSE_WRITE,
-        .on_arrival       = response_write,
+        .on_read_ready    = copy,
+        .state            = COPY,
     },{
         .state            = RESPONSE_DONE,
-
+        .on_arrival       = destroy,
     },{
         .state            = RESPONSE_ERROR,
     }
@@ -217,37 +220,90 @@ static unsigned connected(struct selector_key *key){
             origin_t * o = (origin_t*) key->data;
             selector_notify_block(key->s,o->client_fd);
             selector_set_interest_key(key, OP_READ);
-            return RESPONSE_READ;
+            return HEADERS;
         }
     }
     return RESPONSE_ERROR;
 }
 
-static void response_init(const unsigned state, struct selector_key *key) {
+static void headers_init(const unsigned state, struct selector_key *key) {
     origin_t * o = (origin_t*) key->data;
-    o->response = malloc(4096);
-    o->length = 0;
+    o->parser.response = &o->response;
+    response_parser_init(&o->parser);
+    buffer_init(&o->buff, 4096, malloc(4096));
+    o->readFirst = false;
 }
 
-static unsigned response_read(struct selector_key *key){
+static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
+    size_t size = 4096;
+    char * ptr = buffer_write_ptr(&o->buff,&size);
+    int read = recv(o->origin_fd, ptr, size, 0);
 
-    o->length = recv(key->fd, o->response, 4096, 0);
-    if(o->length > 0){
-        selector_set_interest_key(key, OP_NOOP);
-        return RESPONSE_WRITE;
+    bool error;
+    if(!o->readFirst){
+        parser_headers(&o->parser, ptr);
+        o->readFirst = true;
     }
-    return RESPONSE_ERROR;
+
+    if(read > 0){
+        buffer_write_adv(&o->buff, read);
+        int s = response_consume(&o->buff, &o->parser, &error);
+        if(response_is_done(s, 0))
+            return COPY;
+    }
+    return HEADERS;
 }
 
-static unsigned response_write(const unsigned state, struct selector_key *key){
-    printf("%p\n", key);
+static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
+    int sent = send(o->client_fd, o->response.headers,o->response.header_length, 0);
+    sock_blocking_write(o->client_fd, &o->buff);
+    /*
+    int len;
+    char * remainingBody = buffer_read_ptr(&o->buff, &len);
+    int accum = 0;
+    while(accum < len){
+        accum += send(o->client_fd,&o->buff + accum, len - accum, 0);
+    }
+    */
+}
 
-    printf("sending to client: %s\n", o->response);
-    int sent = send(o->client_fd, o->response, o->length, 0);
-    printf("sent: %d\n", sent);
-    return RESPONSE_DONE;
+static unsigned copy(struct selector_key *key){
+        char buffer[4096];
+        origin_t * o = (origin_t*) key->data;
+        printf("copying from %d to %d\n", o->origin_fd, o->client_fd);
+        int sent = 0;
+        int recvd = recv(o->origin_fd, buffer, 4096, 0);
+        if(recvd > 0){
+            bool done;
+            if(o->response.chunked){
+                done = chunked_is_done(buffer, recvd);
+            } else {
+                done = body_is_done(buffer, recvd);
+            }
+            sent = send(o->client_fd, buffer, recvd, 0);
+            return done?RESPONSE_DONE:COPY;
+        }
+        return RESPONSE_DONE;
+}
+
+static unsigned transform(struct selector_key *key){
+        char buffer[4096];
+        origin_t * o = (origin_t*) key->data;
+        int sent = 0;
+        int recvd = recv(o->origin_fd, buffer, 4096, 0);
+        if(read > 0){
+            bool done;
+            if(o->response.chunked){
+                done = chunked_is_done(buffer, recvd);
+            } else {
+                done = body_is_done(buffer, recvd);
+            }
+            sent = send(o->client_fd, buffer, recvd, 0);
+            return done?RESPONSE_DONE:COPY;
+        }
+        return RESPONSE_DONE;
 }
 
 void request_connect(struct selector_key *key, request_st *d) {
@@ -304,4 +360,12 @@ finally:
 
     d->status = status;
 
+}
+
+static void destroy(const unsigned state, struct selector_key *key){
+    origin_t * o = (origin_t*) key->data;
+    printf("Killing %d\n",o->origin_fd );
+    selector_unregister_fd(key->s, o->origin_fd);
+    close(o->origin_fd);
+    selector_notify_block(key->s, o->client_fd);
 }

@@ -19,9 +19,6 @@ static enum response_state
 enter(const uint8_t c, struct response_parser* p);
 
 bool
-body_is_done(char* buffer, int length);
-
-bool
 body_is_done(char* buffer, int length) {
     return strcmp(buffer + length - 4, "\r\n\r\n") == 0 ? TRUE : FALSE;
 }
@@ -48,7 +45,7 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
 }
 
 void
-headers_init(struct response_parser *p, char* ptr) {
+parser_headers(struct response_parser *p, char* ptr) {
     p->response->headers = ptr;
 }
 
