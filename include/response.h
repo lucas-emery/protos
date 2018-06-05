@@ -16,12 +16,11 @@
 #define FALSE 0
 
 struct response {
-    char * response;
-
     char* length;
     char* mediaType;
-    char* body;
     int chunked;
+    char* headers;
+    int header_length;
 };
 
 enum response_state{
@@ -31,8 +30,6 @@ enum response_state{
     response_media_type,
     response_encoding,
     response_enter,
-    response_body,
-    response_chunk_length,
 
     // apartir de aca están done
     response_done,
@@ -49,9 +46,6 @@ struct response_parser {
    /** cuantos bytes ya leimos */
    uint8_t i;
    /**buffer auxiliar*/
-
-   uint8_t body_count;
-   uint8_t chunk_number;
    char* buffer;
 };
 
