@@ -84,3 +84,6 @@ response_close(struct response_parser *p);
  */
 enum response_state
 response_consume(buffer *b, struct response_parser *p, bool *errored);
+
+bool
+chunked_is_done(char* buffer, int length);

@@ -26,6 +26,11 @@ body_is_done(char* buffer, int length) {
     return strcmp(buffer + length - 4, "\r\n\r\n") == 0 ? TRUE : FALSE;
 }
 
+bool
+chunked_is_done(char* buffer, int length) {
+    return strcmp(buffer + length - 5, "0\r\n\r\n") == 0 ? TRUE : FALSE;
+}
+
 extern enum response_state
 response_consume(buffer *b, struct response_parser *p, bool *errored) {
     enum response_state st = p->state;
