@@ -365,7 +365,5 @@ finally:
 static void destroy(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     printf("Killing %d\n",o->origin_fd );
-    selector_unregister_fd(key->s, o->origin_fd);
-    close(o->origin_fd);
     selector_notify_block(key->s, o->client_fd);
 }

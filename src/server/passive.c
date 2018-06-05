@@ -432,7 +432,9 @@ request_write(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t * s = CLIENT_ATTACHMENT(key);
 
+
     int n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
+    printf("%d sent of %d\n", n, d->request.length);
     if(n == -1) {
         return ERROR;
     }
