@@ -323,8 +323,7 @@ void request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    struct sockaddr_in * originaddr = (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr;
-    originaddr->sin_port = htons(80);
+    
     if (-1 == connect(*fd, (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {

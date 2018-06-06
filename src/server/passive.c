@@ -350,9 +350,7 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
         if(d->parser.request->method == CONNECT) {
-            printf("send 405\n");
-            int lala = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
-            printf("%d lalal\n", lala);
+            int length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
             return ERROR;
         }
         if(request_is_done( &d->parser, st, 0)) {
@@ -382,10 +380,7 @@ request_resolv_blocking(void *data) {
         .ai_next      = NULL,
     };
 
-    char buff[7];
-    snprintf(buff, sizeof(buff), "%d", ntohs(s->client.request.request.dest_port));
-
-    getaddrinfo(s->client.request.request.host, buff, &hints,&s->origin_resolution);
+    getaddrinfo(s->client.request.request.host, "http", &hints, &s->origin_resolution);
 
     selector_notify_block(key->s, key->fd);
 
@@ -445,7 +440,6 @@ static void
 request_read_close(const unsigned state, struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-
     request_close(&d->parser);
 }
 
@@ -453,11 +447,26 @@ static unsigned
 request_write(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t * s = CLIENT_ATTACHMENT(key);
+    int length;
 
 
-    int n = send(s->origin_fd, d->request.request, d->request.length, MSG_NOSIGNAL);
+    int n = send(s->origin_fd, d->request.headers_before_host,
+        d->request.headers_before_host_length, MSG_NOSIGNAL);
+
     if(n == -1) {
         return ERROR;
+    } else if(n != d->request.headers_before_host_length) {
+        d->request.headers_before_host_length -= n;
+        return REQUEST_WRITE;
+    }
+
+    uint8_t* ptr = buffer_read_ptr(d->rb, &length);
+    n = send(s->origin_fd, ptr, length, MSG_NOSIGNAL);
+
+    if(n == -1) {
+        return ERROR;
+    } else if(n != length) {
+        return REQUEST_WRITE;
     }
 
     //log_request(d->status, (const struct sockaddr *)&CLIENT_ATTACHMENT(key)->client_addr,

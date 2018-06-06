@@ -5,9 +5,6 @@ static enum request_state
 method(const uint8_t c, struct request_parser* p);
 
 static enum request_state
-body(const uint8_t c, struct request_parser* p);
-
-static enum request_state
 desiredHeader(const uint8_t c, struct request_parser* p);
 
 static enum request_state
@@ -31,9 +28,9 @@ void
 request_parser_init (struct request_parser *p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
-    p->request->request = malloc(BUFF_SIZE);
     p->request->host = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);
+    p->request->headers_before_host = malloc(BUFF_SIZE);
     p->i = 0;
 }
 
@@ -43,7 +40,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored) {
 
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
-       p->request->request[p->request->length++] = c;
+       p->request->headers_before_host[p->request->headers_before_host_length++] = c;
        st = request_parser_feed(p, c);
        if(request_is_done(p, st, errored)) {
           break;
@@ -57,7 +54,7 @@ request_is_done(struct request_parser *p, const enum request_state st, bool *err
     if(st >= request_error && errored != 0) {
         *errored = true;
     }
-    return st >= request_done || (st == request_body && (p->request->method == GET || p->request->method == HEAD));
+    return st >= request_done;
 }
 
 void
@@ -88,9 +85,6 @@ request_parser_feed (struct request_parser *p, const uint8_t c) {
         case request_host:
             next = host(c, p);
             break;
-        case request_body:
-            next = body(c, p);
-            break;
         case request_enter:
             next = enter(c, p);
             break;
@@ -110,7 +104,6 @@ method(const uint8_t c, struct request_parser* p) {
 
     if(c == ' ') {
         p->buffer[p->i] = 0;
-        // printf("%s\n", p->buffer);
 
         if(strcmp(p->buffer, "GET") == 0) {
             p->request->method = GET;
@@ -124,7 +117,7 @@ method(const uint8_t c, struct request_parser* p) {
             return request_error;
         }
 
-        bzero(p->buffer, BUFF_SIZE);
+        request_reset_buffer(p);
         next = request_headers;
     } else {
         p->buffer[p->i++] = c;
@@ -138,8 +131,6 @@ headers(const uint8_t c, struct request_parser* p) {
     enum request_state next = request_headers;
 
     if(c == '\r') {
-        request_reset_buffer(p);
-        p->buffer[p->i++] = c;
         next = request_enter;
     }
 
@@ -150,24 +141,13 @@ static enum request_state
 enter(const uint8_t c, struct request_parser* p) {
     enum request_state next = request_enter;
 
-    switch(c){
-        case '\n':
+    if(c != '\r' && c != '\n') {
+        request_reset_buffer(p);
+        if(c == 'H') {
             p->buffer[p->i++] = c;
-            if(strcmp(p->buffer, "\r\n\r\n") == 0) {
-                next = request_body;
-            }
-        break;
-        case '\r':
-            p->buffer[p->i++] = c;
-        break;
-        default:
-            request_reset_buffer(p);
-            if(c == 'H') {
-                p->buffer[p->i++] = c;
-                next = request_desired_header;
-            } else
-                next = request_headers;
-        break;
+            next = request_desired_header;
+        } else
+            next = request_headers;
     }
 
     return next;
@@ -200,21 +180,9 @@ host(const uint8_t c, struct request_parser* p) {
 
     if(c == '\r') {
         p->request->host[p->i] = 0;
-        next = request_headers;
+        next = request_done;
     } else if(c != ' ')
         p->request->host[p->i++] = c;
-
-    return next;
-}
-
-static enum request_state
-body(const uint8_t c, struct request_parser* p) {
-    enum request_state next = request_body;
-
-     if(c == '\r')
-        next = request_done;
-
-    //TODO chunked
 
     return next;
 }

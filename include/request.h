@@ -19,7 +19,6 @@ typedef enum request_state{
     request_desired_header,
     request_host,
     request_enter,
-    request_body,
 
     // apartir de aca están done
     request_done,
@@ -43,29 +42,19 @@ union socks_addr {
 
 struct request {
     method_t method;
-    char * request;
-    int length;
-    char * body;
-
-    union socks_addr      dest_addr;
-    /** port in network byte order */
-    in_port_t             dest_port;
     char * host;
+    char* headers_before_host;
+    int headers_before_host_length;
 };
 
 struct request_parser {
    struct request *request;
    request_state_t state;
-   /** cuantos bytes tenemos que leer*/
-   uint8_t n;
-   /** cuantos bytes ya leimos */
+   /*contador auxiliar */
    uint8_t i;
-   /**cuantos bytes quedan por leer de una seleccion*/
+   /**buffer auxiliar*/
    char* buffer;
-    union socks_addr      dest_addr;
-    /** port in network byte order */
-    in_port_t             dest_port;
-    char * host;
+   char * host;
 };
 
 /*
