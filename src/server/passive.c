@@ -341,15 +341,15 @@ request_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
-    // if(strstr(ptr, "CONNECT") != NULL){
-    //     printf("sending 405\n");
-    //     send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
-    //     return ERROR;
-    // }
+
     if(n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
-        if(d->parser.request->method == CONNECT) {
+        // if(d->parser.request->method == CONNECT) {
+        //     int length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
+        //     return ERROR;
+        // }
+        if(error == true) {
             int length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
             return ERROR;
         }

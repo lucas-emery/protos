@@ -260,33 +260,44 @@ static unsigned headers_read(struct selector_key *key){
 
 static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    int sent = send(o->client_fd, o->response.headers,o->response.header_length, 0);
-    sock_blocking_write(o->client_fd, &o->buff);
-    /*
-    int len;
-    char * remainingBody = buffer_read_ptr(&o->buff, &len);
-    int accum = 0;
-    while(accum < len){
-        accum += send(o->client_fd,&o->buff + accum, len - accum, 0);
-    }
-    */
+    int sent = 0;
+
+    do {
+        sent = send(o->client_fd, o->response.headers, o->response.header_length, 0);
+        o->response.header_length -= sent;
+    } while (o->response.header_length != 0);
 }
 
 static unsigned copy(struct selector_key *key){
         char buffer[BUFF_SIZE];
         origin_t * o = (origin_t*) key->data;
-        printf("copying from %d to %d\n", o->origin_fd, o->client_fd);
+        // printf("copying from %d to %d\n", o->origin_fd, o->client_fd);
         int sent = 0;
+
+        if(buffer_can_read(&o->buff)) {
+
+            int length;
+            uint8_t* ptr = buffer_read_ptr(&o->buff, &length);
+
+            sent = send(o->client_fd, ptr, length, MSG_NOSIGNAL);
+            buffer_read_adv(&o->buff, sent);
+
+            if(length != sent)
+                return COPY;
+        }
+
         int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
+
         if(recvd > 0){
             bool done;
-            if(o->response.chunked){
+
+            if(o->response.chunked)
                 done = chunked_is_done(buffer, recvd);
-            } else {
+            else
                 done = body_is_done(buffer, recvd);
-            }
+
             sent = send(o->client_fd, buffer, recvd, 0);
-            return done?RESPONSE_DONE:COPY;
+            return done ? RESPONSE_DONE : COPY;
         }
         return RESPONSE_DONE;
 }
@@ -323,7 +334,7 @@ void request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    
+
     if (-1 == connect(*fd, (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
