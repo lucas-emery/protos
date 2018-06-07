@@ -8,7 +8,7 @@ OBJS=$(SRCS:.c=.o)
 CLIBS=-lpthread
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -g -c $< -o $@
 
 default: all
 

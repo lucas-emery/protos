@@ -15,13 +15,54 @@
 #include "passive.h"
 #include "request.h"
 #include "netutils.h"
+#include "message.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
 #define PORT 8090
 #define LISTEN 30
 
+#define DEBUG
+
 static bool done = false;
+
+enum type{
+    NONE,
+    CLIENT,
+    ORIGIN
+};
+
+typedef struct {
+    enum type type;
+    int peer;
+    char host[64];
+    char state[32];
+} table_entry_t;
+
+table_entry_t table[128];
+
+void * print_table(){
+    while(1){
+        system("clear");
+        for(int i = 0; i < 128 ;i++){
+            if(table[i].type == CLIENT){
+                int peer = -1;
+                for(int j = 0; j < 128; j++){
+                    if(table[j].type == ORIGIN && table[j].peer == i){
+                        peer = j;
+                        break;
+                    }
+                }
+                if(peer != -1)
+                    printf("CLIENT:\t%d\t%-32s\t%-20s\tORIGIN:\t%d\t%s\n", i, table[i].host, table[i].state, peer, table[peer].state);
+                else
+                    printf("CLIENT:\t%d\t%-32s\t%-20s\n", i, table[i].host, table[i].state);
+
+            }
+        }
+        usleep(1000*50);//50ms
+    }
+}
 
 static void sigterm_handler(const int signal){
     printf("Signal %d, graceful exit\n", signal);
@@ -65,6 +106,11 @@ int main(const int argc, const char **argv){
     if(mSocket < 0){
         DieWithUserMessage("ded", "creating master socket");
     }
+
+    #ifdef DEBUG
+        pthread_t t;
+        pthread_create(&t, NULL, print_table, NULL);
+    #endif
 
     printf("Listening on TCP port %d\n", PORT);
 
