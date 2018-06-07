@@ -31,6 +31,11 @@ enum type{
 };
 
 typedef struct {
+    int client_fd;
+    int size;
+}transform_t;
+
+typedef struct {
     enum type type;
     int peer;
     char host[64];
@@ -51,6 +56,7 @@ typedef enum {
 typedef struct {
     int origin_fd;
     int client_fd;
+    int transform_fd;
     buffer buff;
     struct response response;
     struct response_parser parser;
@@ -116,6 +122,8 @@ static void headers_flush(const unsigned state, struct selector_key *key);
 
 static unsigned headers_read(struct selector_key *key);
 
+static unsigned init_transform(const unsigned state, struct selector_key *key);
+
 static unsigned transform(struct selector_key *key);
 
 static unsigned copy(struct selector_key *key);
@@ -147,6 +155,7 @@ static const struct state_definition origin_statbl[] = {
         .on_read_ready    = headers_read,              //TODO
         .on_departure     = headers_flush
     },{
+        .on_arrival       = init_transform,
         .on_read_ready    = transform,
         .state            = TRANSFORM,
     //    .on_block_ready   = response_transform_done,    //TODO
@@ -213,7 +222,7 @@ static void origin_done(struct selector_key* key) {
 
 
 static void origin_destroy(origin_t* o){
-
+    free(o);
 }
 
 static void origin_read(struct selector_key *key) {
@@ -298,7 +307,9 @@ static unsigned headers_read(struct selector_key *key){
             int length = 0;
             buffer_read_ptr(&o->buff, &length);
             increase_body_length(&o->parser, -length);
+            sprintf(table[key->fd].host, o->response.chunked?"CHUNKED":"!CHUNKED");
             return COPY;
+            //return TRANSFORM;
         }
     }
     return HEADERS;
@@ -343,6 +354,65 @@ static unsigned copy(struct selector_key *key){
         return RESPONSE_DONE;
 }
 
+extern const struct fd_handler transform_handler;
+
+static unsigned init_transform(const unsigned st, struct selector_key *key){
+    origin_t * o = (origin_t*) key->data;
+    int fds[] = { -1, -1, -1, -1};
+
+    enum {
+        R  = 0,
+        W  = 1,
+    };
+
+    int ret = 0;
+
+    int in [] = { -1, -1};
+    int out[] = { -1, -1};
+    if(pipe(in) == -1 || pipe(out) == -1) {
+        return RESPONSE_ERROR;
+    }
+    printf("Forking\n");
+    const pid_t cmdpid = fork();
+    if (cmdpid == -1) {
+       return RESPONSE_ERROR;
+    } else if (cmdpid == 0) {
+        close(0);
+        close(1);
+        close(in [W]);
+        close(out[R]);
+        in [W] = out[R] = -1;
+        dup2(in [R], STDIN_FILENO);
+        dup2(out[W], STDOUT_FILENO);
+
+        if(-1 == execv("bin/echo", (char **) 0)) {
+            close(in [R]);
+            close(out[W]);
+            ret = 1;
+        }
+
+        exit(ret);
+    } else {
+        close(in [R]);
+        close(out[W]);
+        in[R] = out[W] = -1;
+
+        fds[2] = in[W];
+        fds[3] = out[R];
+    }
+    transform_t * state = transform_new(o->client_fd);
+
+
+    if(state == NULL)
+        return RESPONSE_ERROR;
+
+    selector_register(key->s, fds[3],&transform_handler, OP_READ, state);
+
+    o->transform_fd = fds[3];
+
+    return ret;
+}
+
 static unsigned transform(struct selector_key *key){
         char buffer[BUFF_SIZE];
         origin_t * o = (origin_t*) key->data;
@@ -353,7 +423,8 @@ static unsigned transform(struct selector_key *key){
             if(o->response.chunked){
                 done = chunked_is_done(buffer, recvd);
             } else {
-                // done = body_is_done(buffer, recvd);
+                printf("writing to toUpper\n");
+                write(o->transform_fd, buffer, recvd);
             }
             sent = send(o->client_fd, buffer, recvd, 0);
             return done?RESPONSE_DONE:COPY;

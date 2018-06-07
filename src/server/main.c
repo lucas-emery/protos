@@ -54,13 +54,13 @@ void * print_table(){
                     }
                 }
                 if(peer != -1)
-                    printf("CLIENT:\t%d\t%-32s\t%-20s\tORIGIN:\t%d\t%s\n", i, table[i].host, table[i].state, peer, table[peer].state);
+                    printf("CLIENT:\t%d\t%-32s\t%-20s\tORIGIN:\t%d\t%s\t%s\n", i, table[i].host, table[i].state, peer, table[peer].state, table[peer].host);
                 else
                     printf("CLIENT:\t%d\t%-32s\t%-20s\n", i, table[i].host, table[i].state);
 
             }
         }
-        usleep(1000*50);//50ms
+        usleep(1000*50);
     }
 }
 
@@ -107,10 +107,10 @@ int main(const int argc, const char **argv){
         DieWithUserMessage("ded", "creating master socket");
     }
 
-    #ifdef DEBUG
+    if(argc == 2 && strcmp(argv[1], "-v") == 0) {
         pthread_t t;
         pthread_create(&t, NULL, print_table, NULL);
-    #endif
+    }
 
     printf("Listening on TCP port %d\n", PORT);
 

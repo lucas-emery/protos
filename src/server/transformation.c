@@ -1,7 +1,56 @@
 #include "transformation.h"
+#include <stdio.h>
+#include <stdlib.h>  // malloc
+#include <string.h>  // memset
+#include <assert.h>  // assert
+#include <errno.h>
+#include <time.h>
+#include <unistd.h>  // close
+#include <pthread.h>
+
+#include <arpa/inet.h>
+
+#include "request.h"
+#include "buffer.h"
+
+#include "stm.h"
+#include "passive.h"
+#include "netutils.h"
+#include "response.h"
 
 transformation_t transformations;
 int transformationCount;
+
+typedef struct {
+    int client_fd;
+    int size;
+}transform_t;
+
+transform_t * transform_new(int client_fd){
+    transform_t * ret = malloc(sizeof(transform_t));
+
+    if(ret == NULL)
+        return NULL;
+
+    ret->client_fd = client_fd;
+    ret->size = 0;
+
+    return ret;
+}
+
+static void transform_read(struct selector_key *key){
+    transform_t * t = (transform_t*) key->data;
+    char buffer[BUFF_SIZE];
+    printf("reading from toUpper\n");
+    ssize_t r = read(key->fd, buffer, BUFF_SIZE);
+    t->size += r;
+    send(t->client_fd,buffer,r,0);
+}
+
+
+const struct fd_handler transform_handler = {
+    .handle_read   = transform_read,
+};
 
 int equals(transformation_t transformation1, transformation_t transformation2);
 
