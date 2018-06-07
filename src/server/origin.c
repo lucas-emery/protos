@@ -194,7 +194,7 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 }
 
 static void origin_done(struct selector_key* key) {
-    printf("origin ded\n");
+    //printf("origin ded\n");
     const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
@@ -294,8 +294,12 @@ static unsigned headers_read(struct selector_key *key){
     if(read > 0){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
-        if(response_is_done(s, 0))
+        if(response_is_done(s, 0)) {
+            int length = 0;
+            buffer_read_ptr(&o->buff, &length);
+            increase_body_length(&o->parser, -length);
             return COPY;
+        }
     }
     return HEADERS;
 }
@@ -319,12 +323,14 @@ static unsigned copy(struct selector_key *key){
         origin_t * o = (origin_t*) key->data;
         int sent = 0;
         int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
+        buffer[recvd] = 0;
         if(recvd > 0){
-            bool done;
+
+            bool done = false;
             if(o->response.chunked){
                 done = chunked_is_done(buffer, recvd);
             } else {
-                done = body_is_done(buffer, recvd);
+                done = body_is_done(&o->parser, recvd);
             }
             sent = send(o->client_fd, buffer, recvd, 0);
             if(done){
@@ -332,7 +338,8 @@ static unsigned copy(struct selector_key *key){
                 return RESPONSE_DONE;
             }
             return COPY;
-        }
+          }
+
         return RESPONSE_DONE;
 }
 
@@ -346,7 +353,7 @@ static unsigned transform(struct selector_key *key){
             if(o->response.chunked){
                 done = chunked_is_done(buffer, recvd);
             } else {
-                done = body_is_done(buffer, recvd);
+                // done = body_is_done(buffer, recvd);
             }
             sent = send(o->client_fd, buffer, recvd, 0);
             return done?RESPONSE_DONE:COPY;
@@ -411,6 +418,6 @@ finally:
 
 static void destroy(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    printf("Killing %d\n",o->origin_fd );
+    //printf("Killing %d\n",o->origin_fd );
     selector_notify_block(key->s, o->client_fd);
 }

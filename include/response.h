@@ -18,6 +18,7 @@ struct response {
     int chunked;
     char* headers;
     int header_length;
+    int body_length;
 };
 
 enum response_state{
@@ -83,7 +84,10 @@ enum response_state
 response_consume(buffer *b, struct response_parser *p, bool *errored);
 
 bool
-body_is_done(char* buffer, int length);
+body_is_done(struct response_parser *p, int length);
+
+void
+increase_body_length(struct response_parser *p, int length);
 
 void
 parser_headers(struct response_parser *p, char* ptr);

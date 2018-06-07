@@ -19,13 +19,21 @@ static enum response_state
 enter(const uint8_t c, struct response_parser* p);
 
 bool
-body_is_done(char* buffer, int length) {
-    return strcmp(buffer + length - 4, "\r\n\r\n") == 0 ? TRUE : FALSE;
+body_is_done(struct response_parser *p, int length) {
+    increase_body_length(p, -length);
+    return p->response->body_length == 0 ? true : false;
+}
+
+void
+increase_body_length(struct response_parser *p, int length) {
+    if(!p->response->chunked)
+        p->response->body_length += length;
 }
 
 bool
 chunked_is_done(char* buffer, int length) {
-    return strcmp(buffer + length - 5, "0\r\n\r\n") == 0 ? TRUE : FALSE;
+  char * end = buffer + length - 4;
+  return *end == '\r' && *(end+1) == '\n' && *(end + 2) == '\r' && *(end + 3) == '\n';
 }
 
 extern enum response_state
@@ -37,6 +45,8 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
        p->response->header_length++;
        st = response_parser_feed(p, c);
        if(response_is_done(st, errored)) {
+         if(!p->response->chunked)
+             p->response->body_length = atoi(p->response->length);
           break;
        }
     }
@@ -57,6 +67,7 @@ response_parser_init (struct response_parser *p) {
     p->response->mediaType = malloc(BUFF_SIZE);
     p->response->chunked = FALSE;
     p->response->header_length = 0;
+    p->response->body_length = 0;
     p->buffer = malloc(BUFF_SIZE);
 }
 

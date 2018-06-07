@@ -331,7 +331,7 @@ static void client_close(struct selector_key *key) {
 }
 
 static void client_done(struct selector_key* key) {
-    printf("client ded\n");
+    //printf("client ded\n");
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,
         CLIENT_ATTACHMENT(key)->origin_fd,
@@ -512,7 +512,7 @@ request_write(struct selector_key *key) {
         buffer_read_adv(d->rb, n);
         return REQUEST_WRITE;
     }
-    printf("returning from request_write with: WAITING\n");
+    //printf("returning from request_write with: WAITING\n");
     return WAITING;
 }
 
