@@ -22,6 +22,20 @@
 
 struct timeval sysTime;
 
+enum type{
+    NONE,
+    CLIENT,
+    ORIGIN
+};
+
+typedef struct {
+    enum type type;
+    int peer;
+    char host[64];
+    char state[32];
+} table_entry_t;
+
+extern table_entry_t table[128];
 
 typedef enum {
 
@@ -177,6 +191,21 @@ static const struct state_definition * client_describe_states(void) {
     return client_statbl;
 }
 
+static char * state_to_string(sock_state_t state){
+    switch(state){
+        case REQUEST_READ:
+            return "REQUEST_READ";
+        case REQUEST_RESOLV:
+            return "REQUEST_RESOLV";
+        case REQUEST_WRITE:
+            return "REQUEST_WRITE";
+        case WAITING:
+            return "WAITING";
+        default:
+            return "DONE/ERROR";
+    }
+}
+
 static client_t * client_new(int client_fd) {
     client_t *ret;
 
@@ -186,6 +215,9 @@ static client_t * client_new(int client_fd) {
         goto finally;
     }
     memset(ret, 0x00, sizeof(*ret));
+
+    table[client_fd].type = CLIENT;
+    strcpy(table[client_fd].state,"REQUEST_READ");
 
     ret->origin_fd       = -1;
     ret->client_fd       = client_fd;
@@ -267,6 +299,7 @@ static void client_done(struct selector_key* key);
 static void client_read(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
     const sock_state_t st = stm_handler_read(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(ERROR == st || DONE == st) {
         client_done(key);
@@ -276,6 +309,7 @@ static void client_read(struct selector_key *key) {
 static void client_write(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
     const sock_state_t st = stm_handler_write(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(ERROR == st || DONE == st) {
         client_done(key);
@@ -285,6 +319,7 @@ static void client_write(struct selector_key *key) {
 static void client_block(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
     const sock_state_t st = stm_handler_block(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(ERROR == st || DONE == st) {
         client_done(key);
@@ -296,6 +331,7 @@ static void client_close(struct selector_key *key) {
 }
 
 static void client_done(struct selector_key* key) {
+    printf("client ded\n");
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,
         CLIENT_ATTACHMENT(key)->origin_fd,
@@ -305,6 +341,9 @@ static void client_done(struct selector_key* key) {
             if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
                 abort();
             }
+            strcpy(table[key->fd].state, "");
+            strcpy(table[key->fd].host, "");
+            table[key->fd].type = NONE;
             close(fds[i]);
         }
     }
@@ -350,7 +389,9 @@ request_read(struct selector_key *key) {
             return DONE;
         }
         if(request_is_done( &d->parser, st, 0)) {
-             ret = request_resolv(key, d);
+            selector_set_interest_key(key, OP_NOOP);
+            strcpy(table[key->fd].host,d->request.host);
+            ret = request_resolv(key, d);
         }
     } else {
         ret = ERROR;
@@ -471,17 +512,12 @@ request_write(struct selector_key *key) {
         buffer_read_adv(d->rb, n);
         return REQUEST_WRITE;
     }
-
-    //log_request(d->status, (const struct sockaddr *)&CLIENT_ATTACHMENT(key)->client_addr,
-    //                       (const struct sockaddr *)&CLIENT_ATTACHMENT(key)->origin_addr);
+    printf("returning from request_write with: WAITING\n");
     return WAITING;
 }
 
 static unsigned
 destroy(struct selector_key *key){
     client_t * c = CLIENT_ATTACHMENT(key);
-    printf("killing client\n");
-    selector_unregister_fd(key->s, key->fd);
-    close(key->fd);
     return DONE;
 }

@@ -24,6 +24,21 @@
 void startTime();
 void printDeltaTime();
 
+enum type{
+    NONE,
+    CLIENT,
+    ORIGIN
+};
+
+typedef struct {
+    enum type type;
+    int peer;
+    char host[64];
+    char state[32];
+} table_entry_t;
+
+extern table_entry_t table[128];
+
 typedef enum {
     CONNECTING,
     HEADERS,
@@ -107,6 +122,21 @@ static unsigned copy(struct selector_key *key);
 
 static void destroy(const unsigned state, struct selector_key *key);
 
+static char * state_to_string(const origin_state_t st){
+    switch (st) {
+        case CONNECTING:
+            return "CONNECTING";
+        case HEADERS:
+            return "HEADERS";
+        case TRANSFORM:
+            return "TRANSFORM";
+        case COPY:
+            return "COPY";
+        default:
+            return "DONE";
+    }
+}
+
 static const struct state_definition origin_statbl[] = {
     {
         .state            = CONNECTING,
@@ -146,6 +176,12 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
     }
     memset(ret, 0x00, sizeof(*ret));
 
+    table[origin_fd].type = ORIGIN;
+    table[origin_fd].peer = client_fd;
+    table[client_fd].peer = origin_fd;
+    strcpy(table[origin_fd].host, "");
+    strcpy(table[origin_fd].state, "CONNECTING");
+
     ret->origin_fd = origin_fd;
     ret->client_fd = client_fd;
 
@@ -158,6 +194,7 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 }
 
 static void origin_done(struct selector_key* key) {
+    printf("origin ded\n");
     const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
@@ -167,6 +204,8 @@ static void origin_done(struct selector_key* key) {
             if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
                 abort();
             }
+            table[key->fd].type = NONE;
+            strcpy(table[key->fd].state, "");
             close(fds[i]);
         }
     }
@@ -180,6 +219,7 @@ static void origin_destroy(origin_t* o){
 static void origin_read(struct selector_key *key) {
     struct state_machine *stm   = &ORIGIN_ATTACHMENT(key)->stm;
     const origin_state_t st = stm_handler_read(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(RESPONSE_ERROR == st || RESPONSE_DONE == st) {
         origin_done(key);
@@ -189,6 +229,7 @@ static void origin_read(struct selector_key *key) {
 static void origin_write(struct selector_key *key) {
     struct state_machine *stm   = &ORIGIN_ATTACHMENT(key)->stm;
     const origin_state_t st = stm_handler_write(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(RESPONSE_ERROR == st || RESPONSE_DONE == st) {
         origin_done(key);
@@ -198,6 +239,7 @@ static void origin_write(struct selector_key *key) {
 static void origin_block(struct selector_key *key) {
     struct state_machine *stm   = &ORIGIN_ATTACHMENT(key)->stm;
     const origin_state_t st = stm_handler_block(stm, key);
+    strcpy(table[key->fd].state, state_to_string(st));
 
     if(RESPONSE_ERROR == st || RESPONSE_DONE == st) {
         origin_done(key);
@@ -275,7 +317,6 @@ static void headers_flush(const unsigned state, struct selector_key *key){
 static unsigned copy(struct selector_key *key){
         char buffer[BUFF_SIZE];
         origin_t * o = (origin_t*) key->data;
-        printf("copying from %d to %d\n", o->origin_fd, o->client_fd);
         int sent = 0;
         int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
         if(recvd > 0){
@@ -286,7 +327,11 @@ static unsigned copy(struct selector_key *key){
                 done = body_is_done(buffer, recvd);
             }
             sent = send(o->client_fd, buffer, recvd, 0);
-            return done?RESPONSE_DONE:COPY;
+            if(done){
+                selector_notify_block(key->s, o->client_fd);
+                return RESPONSE_DONE;
+            }
+            return COPY;
         }
         return RESPONSE_DONE;
 }
@@ -323,7 +368,7 @@ void request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    
+
     if (-1 == connect(*fd, (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
