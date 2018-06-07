@@ -51,7 +51,7 @@ struct request_parser {
    struct request *request;
    request_state_t state;
    /*contador auxiliar */
-   uint8_t i;
+   uint16_t i;
    /**buffer auxiliar*/
    char* buffer;
    char * host;

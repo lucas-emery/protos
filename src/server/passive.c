@@ -450,12 +450,13 @@ request_write(struct selector_key *key) {
     int length;
 
 
-    int n = send(s->origin_fd, d->request.headers_before_host,
-        d->request.headers_before_host_length, MSG_NOSIGNAL);
+    int n = send(s->origin_fd, d->request.headers_before_host, d->request.headers_before_host_length, MSG_NOSIGNAL);
 
     if(n == -1) {
         return ERROR;
     } else if(n != d->request.headers_before_host_length) {
+        d->request.headers_before_host += n;    //A lo cabeza avanzo el buffer que tiene la parte "parseada" del request
+                                                // para que cuando vuelva no envie de nuevo lo mismo
         d->request.headers_before_host_length -= n;
         return REQUEST_WRITE;
     }
@@ -464,8 +465,13 @@ request_write(struct selector_key *key) {
     n = send(s->origin_fd, ptr, length, MSG_NOSIGNAL);
 
     if(n == -1) {
-        return ERROR;
+        if(errno == EWOULDBLOCK) {
+            return REQUEST_WRITE;
+        } else {
+            return ERROR;
+        }
     } else if(n != length) {
+        buffer_read_adv(d->rb, n);
         return REQUEST_WRITE;
     }
 

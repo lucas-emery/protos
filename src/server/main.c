@@ -15,6 +15,7 @@
 #include "passive.h"
 #include "request.h"
 #include "netutils.h"
+#include "message.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
