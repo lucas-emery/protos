@@ -5,7 +5,7 @@ CFLAGS=-I$(IDIR) -Wall
 SRCS=$(wildcard *.c)
 OBJS=$(SRCS:.c=.o)
 
-CLIBS=-lpthread
+CLIBS=-lpthread -lsctp
 
 %.o: %.c
 	$(CC) $(CFLAGS) -g -c $< -o $@
