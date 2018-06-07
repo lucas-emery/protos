@@ -22,7 +22,7 @@
 #define PORT 8090
 #define LISTEN 30
 
-#define DEBUG
+//#define DEBUG
 
 static bool done = false;
 

@@ -441,6 +441,70 @@ selector_set_interest_key(struct selector_key *key, fd_interest i) {
     return ret;
 }
 
+selector_status
+selector_add_interest(fd_selector s, int fd, fd_interest i) {
+    selector_status ret = SELECTOR_SUCCESS;
+
+    if(NULL == s || INVALID_FD(fd)) {
+        ret = SELECTOR_IARGS;
+        goto finally;
+    }
+    struct item *item = s->fds + fd;
+    if(!ITEM_USED(item)) {
+        ret = SELECTOR_IARGS;
+        goto finally;
+    }
+    item->interest |= i;
+    items_update_fdset_for_fd(s, item);
+finally:
+    return ret;
+}
+
+selector_status
+selector_remove_interest(fd_selector s, int fd, fd_interest i) {
+    selector_status ret = SELECTOR_SUCCESS;
+
+    if(NULL == s || INVALID_FD(fd)) {
+        ret = SELECTOR_IARGS;
+        goto finally;
+    }
+    struct item *item = s->fds + fd;
+    if(!ITEM_USED(item)) {
+        ret = SELECTOR_IARGS;
+        goto finally;
+    }
+    item->interest &= ~i;
+    items_update_fdset_for_fd(s, item);
+finally:
+    return ret;
+}
+
+selector_status
+selector_add_interest_key(struct selector_key *key, fd_interest i) {
+    selector_status ret;
+
+    if(NULL == key || NULL == key->s || INVALID_FD(key->fd)) {
+        ret = SELECTOR_IARGS;
+    } else {
+        ret = selector_add_interest(key->s, key->fd, i);
+    }
+
+    return ret;
+}
+
+selector_status
+selector_remove_interest_key(struct selector_key *key, fd_interest i) {
+    selector_status ret;
+
+    if(NULL == key || NULL == key->s || INVALID_FD(key->fd)) {
+        ret = SELECTOR_IARGS;
+    } else {
+        ret = selector_remove_interest(key->s, key->fd, i);
+    }
+
+    return ret;
+}
+
 /**
  * se encarga de manejar los resultados del select.
  * se encuentra separado para facilitar el testing

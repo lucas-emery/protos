@@ -165,9 +165,21 @@ selector_unregister_fd(fd_selector   s,
 selector_status
 selector_set_interest(fd_selector s, int fd, fd_interest i);
 
+selector_status
+selector_add_interest(fd_selector s, int fd, fd_interest i);
+
+selector_status
+selector_remove_interest(fd_selector s, int fd, fd_interest i);
+
 /** permite cambiar los intereses para un file descriptor */
 selector_status
 selector_set_interest_key(struct selector_key *key, fd_interest i);
+
+selector_status
+selector_add_interest_key(struct selector_key *key, fd_interest i);
+
+selector_status
+selector_remove_interest_key(struct selector_key *key, fd_interest i);
 
 
 /**
