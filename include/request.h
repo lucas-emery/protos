@@ -43,8 +43,8 @@ union socks_addr {
 struct request {
     method_t method;
     char * host;
-    char* headers_before_host;
-    int headers_before_host_length;
+    char* headers;
+    int headers_length;
 };
 
 struct request_parser {

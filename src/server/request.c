@@ -30,7 +30,7 @@ request_parser_init (struct request_parser *p) {
     memset(p->request, 0, sizeof(*(p->request)));
     p->request->host = malloc(BUFF_SIZE);
     p->buffer = malloc(BUFF_SIZE);
-    p->request->headers_before_host = malloc(BUFF_SIZE);
+    p->request->headers = malloc(BUFF_SIZE);
     p->i = 0;
 }
 
@@ -40,7 +40,7 @@ request_consume(buffer *b, struct request_parser *p, bool *errored) {
 
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
-       p->request->headers_before_host[p->request->headers_before_host_length++] = c;
+       p->request->headers[p->request->headers_length++] = c;
        st = request_parser_feed(p, c);
        if(request_is_done(p, st, errored)) {
           break;
@@ -131,6 +131,7 @@ headers(const uint8_t c, struct request_parser* p) {
     enum request_state next = request_headers;
 
     if(c == '\r') {
+        p->buffer[p->i++] = c;
         next = request_enter;
     }
 
@@ -139,18 +140,27 @@ headers(const uint8_t c, struct request_parser* p) {
 
 static enum request_state
 enter(const uint8_t c, struct request_parser* p) {
-    enum request_state next = request_enter;
 
-    if(c != '\r' && c != '\n') {
-        request_reset_buffer(p);
-        if(c == 'H') {
+    switch(c){
+        case '\n':
             p->buffer[p->i++] = c;
-            next = request_desired_header;
-        } else
-            next = request_headers;
+            if(strcmp(p->buffer, "\r\n\r\n") == 0)
+                return request_done;
+        break;
+        case '\r':
+            p->buffer[p->i++] = c;
+        break;
+        default:
+            request_reset_buffer(p);
+            if(c == 'H') {
+                p->buffer[p->i++] = c;
+                return request_desired_header;
+            }
+            return request_headers;
+        break;
     }
 
-    return next;
+    return request_enter;
 }
 
 static enum request_state
@@ -180,7 +190,7 @@ host(const uint8_t c, struct request_parser* p) {
 
     if(c == '\r') {
         p->request->host[p->i] = 0;
-        next = request_done;
+        next = request_enter;
     } else if(c != ' ')
         p->request->host[p->i++] = c;
 

@@ -341,17 +341,13 @@ request_read(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
-    // if(strstr(ptr, "CONNECT") != NULL){
-    //     printf("sending 405\n");
-    //     send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
-    //     return ERROR;
-    // }
+
     if(n > 0) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
         if(d->parser.request->method == CONNECT) {
             int length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
-            return ERROR;
+            return DONE;
         }
         if(request_is_done( &d->parser, st, 0)) {
              ret = request_resolv(key, d);
@@ -450,14 +446,14 @@ request_write(struct selector_key *key) {
     int length;
 
 
-    int n = send(s->origin_fd, d->request.headers_before_host, d->request.headers_before_host_length, MSG_NOSIGNAL);
+    int n = send(s->origin_fd, d->request.headers, d->request.headers_length, MSG_NOSIGNAL);
 
     if(n == -1) {
         return ERROR;
-    } else if(n != d->request.headers_before_host_length) {
-        d->request.headers_before_host += n;    //A lo cabeza avanzo el buffer que tiene la parte "parseada" del request
+    } else if(n != d->request.headers_length) {
+        d->request.headers += n;    //A lo cabeza avanzo el buffer que tiene la parte "parseada" del request
                                                 // para que cuando vuelva no envie de nuevo lo mismo
-        d->request.headers_before_host_length -= n;
+        d->request.headers_length -= n;
         return REQUEST_WRITE;
     }
 
@@ -465,11 +461,12 @@ request_write(struct selector_key *key) {
     n = send(s->origin_fd, ptr, length, MSG_NOSIGNAL);
 
     if(n == -1) {
-        if(errno == EWOULDBLOCK) {
+
+        if(errno == EWOULDBLOCK)
             return REQUEST_WRITE;
-        } else {
+        else
             return ERROR;
-        }
+
     } else if(n != length) {
         buffer_read_adv(d->rb, n);
         return REQUEST_WRITE;
