@@ -46,15 +46,15 @@ typedef enum {
      *     - OP_READ sobre client_fd
      *
      * Transiciones:
-     *   - REQUEST_READ        mientras el mensaje no esté completo
+     *   - REQUEST_HEADERS        mientras el mensaje no esté completo
      *   - REQUEST_RESOLV      si requiere resolver un nombre DNS
      *   - REQUEST_CONNECTING  si no require resolver DNS, y podemos iniciar
      *                         la conexión al origin server.
-     *   - REQUEST_WRITE       si determinamos que el mensaje no lo podemos
+     *   - COPY       si determinamos que el mensaje no lo podemos
      *                         procesar (ej: no soportamos un comando)
      *   - ERROR               ante cualquier error (IO/parseo)
      */
-    REQUEST_READ,
+    REQUEST_HEADERS,
 
     /**
      * Espera la resolución DNS
@@ -65,7 +65,7 @@ typedef enum {
      * Transiciones:
      *     - REQUEST_CONNECTING si se logra resolución al nombre y se puede
      *                          iniciar la conexión al origin server.
-     *     - REQUEST_WRITE      en otro caso
+     *     - COPY      en otro caso
      */
     REQUEST_RESOLV,
 
@@ -81,7 +81,7 @@ typedef enum {
      *                  contenido de los descriptores
      *   - ERROR        ante I/O error
      */
-    REQUEST_WRITE,
+    COPY,
     WAITING,
 
     // estados terminales
@@ -132,7 +132,8 @@ typedef struct {
         request_st         request;
     } client;
 
-    /** buffers para ser usados read_buffer, write_buffer.*/
+    int bodyWritten;
+    bool * respDone, * reqDone;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     buffer read_buffer, write_buffer;
 
@@ -160,13 +161,15 @@ static unsigned request_read(struct selector_key *key);
 
 static unsigned request_resolv_done(struct selector_key *key);
 
-static unsigned request_write(struct selector_key *key);
+static unsigned copy_r(struct selector_key *key);
+
+static unsigned copy_w(struct selector_key *key);
 
 static unsigned destroy(struct selector_key *key);
 
 static const struct state_definition client_statbl[] = {
     {
-        .state            = REQUEST_READ,
+        .state            = REQUEST_HEADERS,
         .on_arrival       = request_init,
         .on_departure     = request_read_close,
         .on_read_ready    = request_read,
@@ -174,8 +177,9 @@ static const struct state_definition client_statbl[] = {
         .state            = REQUEST_RESOLV,
         .on_block_ready   = request_resolv_done,
     },{
-        .state            = REQUEST_WRITE,
-        .on_block_ready   = request_write,
+        .state            = COPY,
+        .on_write_ready   = copy_w,
+        .on_read_ready    = copy_r,
     },{
         .state            = WAITING,
         .on_block_ready   = destroy,
@@ -193,12 +197,12 @@ static const struct state_definition * client_describe_states(void) {
 
 static char * state_to_string(sock_state_t state){
     switch(state){
-        case REQUEST_READ:
-            return "REQUEST_READ";
+        case REQUEST_HEADERS:
+            return "REQUEST_HEADERS";
         case REQUEST_RESOLV:
             return "REQUEST_RESOLV";
-        case REQUEST_WRITE:
-            return "REQUEST_WRITE";
+        case COPY:
+            return "COPY";
         case WAITING:
             return "WAITING";
         default:
@@ -212,26 +216,27 @@ static client_t * client_new(int client_fd) {
     ret = malloc(sizeof(*ret));
 
     if(ret == NULL) {
-        goto finally;
+        return ret;
     }
     memset(ret, 0x00, sizeof(*ret));
 
     table[client_fd].type = CLIENT;
-    strcpy(table[client_fd].state,"REQUEST_READ");
+    strcpy(table[client_fd].state,"REQUEST_HEADERS");
 
     ret->origin_fd       = -1;
     ret->client_fd       = client_fd;
     ret->client_addr_len = sizeof(ret->client_addr);
 
-    ret->stm    .initial   = REQUEST_READ;
+    ret->stm    .initial   = REQUEST_HEADERS;
     ret->stm    .max_state = ERROR;
     ret->stm    .states    = client_describe_states();
     stm_init(&ret->stm);
 
+    ret->reqDone = malloc(sizeof(bool));
+    ret->respDone = malloc(sizeof(bool));
     buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
     buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
 
-finally:
     return ret;
 }
 
@@ -370,9 +375,9 @@ request_init(const unsigned state, struct selector_key *key) {
 static unsigned
 request_read(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-
+    printf("Writing on %p\n", d->rb);
       buffer *b     = d->rb;
-    unsigned  ret   = REQUEST_READ;
+    unsigned  ret   = REQUEST_HEADERS;
         bool  error = false;
      uint8_t *ptr;
       size_t  count;
@@ -418,7 +423,6 @@ request_resolv_blocking(void *data) {
     };
 
     getaddrinfo(s->client.request.request.host, "http", &hints, &s->origin_resolution);
-
     selector_notify_block(key->s, key->fd);
 
     free(data);
@@ -433,14 +437,14 @@ request_resolv(struct selector_key * key, request_st * d) {
 
     struct selector_key* k = malloc(sizeof(*key));
     if(k == NULL) {
-        ret       = REQUEST_WRITE;
+        ret       = COPY;
         d->status = status_general_SOCKS_server_failure;
         selector_set_interest_key(key, OP_WRITE);
     } else {
         memcpy(k, key, sizeof(*k));
         if(-1 == pthread_create(&tid, 0,
                         request_resolv_blocking, k)) {
-            ret       = REQUEST_WRITE;
+            ret       = COPY;
             d->status = status_general_SOCKS_server_failure;
             selector_set_interest_key(key, OP_WRITE);
         } else{
@@ -456,7 +460,6 @@ request_resolv_done(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t *s      =  CLIENT_ATTACHMENT(key);
 
-
     if(s->origin_resolution == 0) {
         d->status = status_general_SOCKS_server_failure;
     } else {
@@ -470,7 +473,7 @@ request_resolv_done(struct selector_key *key) {
     }
     request_connect(key, d);
     selector_set_interest_key(key, OP_NOOP);
-    return REQUEST_WRITE;
+    return COPY;
 }
 
 static void
@@ -495,7 +498,7 @@ request_write(struct selector_key *key) {
         d->request.headers += n;    //A lo cabeza avanzo el buffer que tiene la parte "parseada" del request
                                                 // para que cuando vuelva no envie de nuevo lo mismo
         d->request.headers_length -= n;
-        return REQUEST_WRITE;
+        return COPY;
     }
 
     uint8_t* ptr = buffer_read_ptr(d->rb, &length);
@@ -504,13 +507,13 @@ request_write(struct selector_key *key) {
     if(n == -1) {
 
         if(errno == EWOULDBLOCK)
-            return REQUEST_WRITE;
+            return COPY;
         else
             return ERROR;
 
     } else if(n != length) {
         buffer_read_adv(d->rb, n);
-        return REQUEST_WRITE;
+        return COPY;
     }
     //printf("returning from request_write with: WAITING\n");
     return WAITING;
@@ -520,4 +523,54 @@ static unsigned
 destroy(struct selector_key *key){
     client_t * c = CLIENT_ATTACHMENT(key);
     return DONE;
+}
+
+static unsigned
+copy_r(struct selector_key *key) {
+    client_t * c = CLIENT_ATTACHMENT(key);
+
+    size_t size;
+    ssize_t n;
+    buffer* b    = &c->read_buffer;
+    unsigned ret = COPY;
+
+    uint8_t *ptr = buffer_write_ptr(b, &size);
+    n = recv(key->fd, ptr, size, 0);
+    if(n <= 0) {
+        return ERROR;
+    } else {
+        buffer_write_adv(b, n);
+    }
+    selector_add_interest(key->s,c->origin_fd, OP_WRITE);
+    c->bodyWritten += n;
+    //if(c->bodyWritten == c->client.request.request.contentLength)
+    //    *c->reqDone = true;
+    return COPY;
+}
+
+/** escribe bytes encolados */
+static unsigned
+copy_w(struct selector_key *key) {
+    client_t * c = CLIENT_ATTACHMENT(key);
+
+    size_t size;
+    ssize_t n;
+    buffer* b = &c->write_buffer;
+    unsigned ret = COPY;
+
+    uint8_t *ptr = buffer_read_ptr(b, &size);
+    if(size == 0){
+        selector_remove_interest(key->s, key->fd, OP_WRITE);
+    }
+    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    if(n == -1) {
+        return ERROR;
+    } else {
+        buffer_read_adv(b, n);
+    }
+
+    if(*c->respDone && *c->reqDone)
+        return DONE;
+
+    return COPY;
 }

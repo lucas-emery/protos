@@ -56,6 +56,10 @@ typedef struct {
     struct response_parser parser;
     bool readFirst;
 
+    buffer *rb , *wb;
+    bool * respDone, *reqDone;
+
+
     struct state_machine stm;
 } origin_t;
 
@@ -102,6 +106,8 @@ typedef struct {
         request_st         request;
     } client;
 
+    bool * respDone, *reqDone;
+
     /** buffers para ser usados read_buffer, write_buffer.*/
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     buffer read_buffer, write_buffer;
@@ -118,7 +124,9 @@ static unsigned headers_read(struct selector_key *key);
 
 static unsigned transform(struct selector_key *key);
 
-static unsigned copy(struct selector_key *key);
+static unsigned copy_r(struct selector_key *key);
+
+static unsigned copy_w(struct selector_key *key);
 
 static void destroy(const unsigned state, struct selector_key *key);
 
@@ -151,7 +159,8 @@ static const struct state_definition origin_statbl[] = {
         .state            = TRANSFORM,
     //    .on_block_ready   = response_transform_done,    //TODO
     },{
-        .on_read_ready    = copy,
+        .on_write_ready   = copy_w,
+        .on_read_ready    = copy_r,
         .state            = COPY,
     },{
         .state            = RESPONSE_DONE,
@@ -258,14 +267,15 @@ static const struct fd_handler origin_handler = {
 };
 
 static unsigned connected(struct selector_key *key){
-    int error = 0, len = 0;;
+    int error = 0, len = 0;
+    printf("connected\n");
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
             origin_t * o = (origin_t*) key->data;
-            selector_notify_block(key->s,o->client_fd);
-            selector_set_interest_key(key, OP_READ);
-            return HEADERS;
+            //selector_notify_block(key->s,o->client_fd);
+            //selector_set_interest_key(key, OP_READ);
+            return COPY;
         }
     }
     return RESPONSE_ERROR;
@@ -283,6 +293,7 @@ static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     size_t size = BUFF_SIZE;
     char * ptr = buffer_write_ptr(&o->buff,&size);
+    printf("header read\n");
     int read = recv(o->origin_fd, ptr, size, 0);
 
     bool error;
@@ -292,6 +303,8 @@ static unsigned headers_read(struct selector_key *key){
     }
 
     if(read > 0){
+
+        printf("reading response headers\n");
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
@@ -306,16 +319,16 @@ static unsigned headers_read(struct selector_key *key){
 
 static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    int sent = send(o->client_fd, o->response.headers,o->response.header_length, 0);
-    sock_blocking_write(o->client_fd, &o->buff);
-    /*
-    int len;
-    char * remainingBody = buffer_read_ptr(&o->buff, &len);
-    int accum = 0;
-    while(accum < len){
-        accum += send(o->client_fd,&o->buff + accum, len - accum, 0);
+    buffer* b    = o->rb;
+    ssize_t size;
+    printf("flushing headers\n");
+
+    uint8_t *ptr = buffer_write_ptr(b, &size);
+    if(size < o->response.header_length){
+        for (size_t i = 0; i < o->response.header_length; i++) {
+            ptr[i] = o->response.headers[i];
+        }
     }
-    */
 }
 
 static unsigned copy(struct selector_key *key){
@@ -362,6 +375,7 @@ static unsigned transform(struct selector_key *key){
 }
 
 void request_connect(struct selector_key *key, request_st *d) {
+    client_t * s = (client_t*) key->data;
     bool error                  = false;
     // da legibilidad
     enum socks_response_status status =  d->status;
@@ -375,7 +389,6 @@ void request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-
     if (-1 == connect(*fd, (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
@@ -393,6 +406,11 @@ void request_connect(struct selector_key *key, request_st *d) {
                 error = true;
                 goto finally;
             }
+            state->respDone = s->respDone;
+            state->reqDone = s->reqDone;
+            state->wb = &s->read_buffer;
+            printf("assigning %p\n", &s->read_buffer);
+            state->rb = &s->write_buffer;
         } else {
             status = errno_to_socks(errno);
             error = true;
@@ -420,4 +438,65 @@ static void destroy(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     //printf("Killing %d\n",o->origin_fd );
     selector_notify_block(key->s, o->client_fd);
+}
+
+static unsigned
+copy_r(struct selector_key *key) {
+    origin_t * o = ORIGIN_ATTACHMENT(key);
+
+    size_t size;
+    ssize_t n;
+    buffer* b    = o->rb;
+    unsigned ret = COPY;
+
+    uint8_t *ptr = buffer_write_ptr(b, &size);
+    n = recv(key->fd, ptr, size, 0);
+    if(n <= 0) {
+        return RESPONSE_ERROR;
+    } else {
+        buffer_write_adv(b, n);
+    }
+    selector_add_interest(key->s,o->client_fd, OP_WRITE);
+    bool done = false;
+
+    if(o->response.chunked){
+        done = chunked_is_done(ptr, n);
+    } else {
+        done = body_is_done(&o->parser, n);
+    }
+    *o->respDone = done;
+    return COPY;
+}
+
+/** escribe bytes encolados */
+static unsigned
+copy_w(struct selector_key *key) {
+    origin_t * o = ORIGIN_ATTACHMENT(key);
+
+    size_t size;
+    ssize_t n;
+    buffer* b = o->wb;
+    unsigned ret = COPY;
+    printf("using buffer: %p\n", o->wb);
+    uint8_t *ptr = buffer_read_ptr(b, &size);
+    printf("done\n");
+    if(size == 0){
+        selector_remove_interest(key->s, key->fd, OP_WRITE);
+        return COPY;
+    }
+    printf("%s\n", ptr);
+    n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    if(n == -1) {
+        return RESPONSE_ERROR;
+    } else {
+        buffer_read_adv(b, n);
+    }
+
+    if(*o->reqDone && !*o->respDone)
+        return HEADERS;
+
+    if(*o->respDone && *o->reqDone)
+        return RESPONSE_DONE;
+
+    return COPY;
 }
