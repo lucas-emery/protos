@@ -19,6 +19,10 @@ enter(const uint8_t c, struct request_parser* p);
 static void
 request_reset_buffer(struct request_parser* p) ;
 
+
+static enum request_state
+content_length(const uint8_t c, struct request_parser* p);
+
 void
 request_log() {
 
@@ -84,6 +88,9 @@ request_parser_feed (struct request_parser *p, const uint8_t c) {
             break;
         case request_host:
             next = host(c, p);
+            break;
+        case request_content_length:
+            next = content_length(c, p);
             break;
         case request_enter:
             next = enter(c, p);
@@ -152,7 +159,7 @@ enter(const uint8_t c, struct request_parser* p) {
         break;
         default:
             request_reset_buffer(p);
-            if(c == 'H') {
+            if(c == 'H' || c == 'C') {
                 p->buffer[p->i++] = c;
                 return request_desired_header;
             }
@@ -172,7 +179,10 @@ desiredHeader(const uint8_t c, struct request_parser* p) {
 
         if(strcmp(p->buffer, "Host") == 0)
             next = request_host;
-        else
+        else if(strcmp(p->buffer, "Content-Length") == 0) {
+            next = request_content_length;
+            request_reset_buffer(p);
+        } else
             next = request_headers;
 
         request_reset_buffer(p);
@@ -183,6 +193,20 @@ desiredHeader(const uint8_t c, struct request_parser* p) {
     return next;
 }
 
+
+static enum request_state
+content_length(const uint8_t c, struct request_parser* p) {
+    enum request_state next = request_content_length;
+
+    if(c == '\r') {
+        p->buffer[p->i] = 0;
+        p->request->content_length = atoi(p->buffer);
+        next = request_enter;
+    } else if(c != ' ')
+        p->buffer[p->i++] = c;
+
+    return next;
+}
 
 static enum request_state
 host(const uint8_t c, struct request_parser* p) {

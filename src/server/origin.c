@@ -106,9 +106,8 @@ typedef struct {
         request_st         request;
     } client;
 
-    bool * respDone, *reqDone;
-
-    /** buffers para ser usados read_buffer, write_buffer.*/
+    int bodyWritten;
+    bool * respDone, * reqDone;
     uint8_t raw_buff_a[2048], raw_buff_b[2048];
     buffer read_buffer, write_buffer;
 

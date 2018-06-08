@@ -19,6 +19,7 @@ typedef enum request_state{
     request_desired_header,
     request_host,
     request_enter,
+    request_content_length,
 
     // apartir de aca están done
     request_done,
@@ -45,6 +46,7 @@ struct request {
     char * host;
     char* headers;
     int headers_length;
+    int content_length;
 };
 
 struct request_parser {
