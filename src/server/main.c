@@ -4,23 +4,28 @@
 #include <limits.h>
 #include <signal.h>
 #include <errno.h>
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <netinet/sctp.h>
+#include <arpa/inet.h>
 
 #include "selector.h"
 #include "passive.h"
 #include "request.h"
 #include "netutils.h"
+#include "sctpRequest.h"
 #include "message.h"
+
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
 #define PORT 8090
+#define SCTP_PORT 9090
 #define LISTEN 30
+#define SCTP_LISTEN 5
 
 //#define DEBUG
 
@@ -155,6 +160,51 @@ int main(const int argc, const char **argv){
 
     if(ss != SELECTOR_SUCCESS){
         DieWithUserMessage("ded", "registering master socket fd");
+    }
+
+    const int sctp_socket = socket (AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+
+    if(sctp_socket < 0)
+        DieWithUserMessage("ded", "creating sctp socket");
+
+    struct sockaddr_in sctp_addr;
+    memset(&sctp_addr, 0, sizeof(sctp_addr)); 
+    sctp_addr.sin_family = AF_INET;
+    sctp_addr.sin_addr.s_addr = htonl (INADDR_ANY);
+    sctp_addr.sin_port = htons (SCTP_PORT);
+
+    if(bind(sctp_socket, (struct sockaddr *)&sctp_addr, sizeof(sctp_addr)) < 0) {
+        DieWithUserMessage("ded", "binding sctp socket");
+    }
+
+    struct sctp_initmsg initmsg;
+    memset(&initmsg, 0, sizeof (initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+    
+    if(setsockopt (sctp_socket, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof (initmsg)) < 0) {
+        DieWithUserMessage("ded", "setsockopt sctp failed");
+    }
+
+    if(listen(sctp_socket, SCTP_LISTEN) < 0){
+        DieWithUserMessage("ded", "sctp socket listening");
+    }
+
+    if(selector_fd_set_nio(sctp_socket) == -1){
+        DieWithUserMessage("ded", "getting sctp socket flags");
+    }
+
+    const struct fd_handler sctp_socksv5 = {
+        .handle_read = sctp_socks_accept,
+        .handle_write = NULL,
+        .handle_close = NULL,
+    };
+
+    ss = selector_register(selector, sctp_socket, &sctp_socksv5, OP_READ, NULL);
+
+    if(ss != SELECTOR_SUCCESS){
+        DieWithUserMessage("ded", "registering sctp socket fd");
     }
 
     while(!done){
