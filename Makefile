@@ -3,7 +3,7 @@ all:
 
 debug:
 	$(MAKE) debug -C src/server
-	$(MAKE) debug -C src/client
+#	$(MAKE) debug -C src/client
 
 server:
 	$(MAKE) -C src/server

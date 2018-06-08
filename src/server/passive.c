@@ -134,7 +134,7 @@ typedef struct {
 
     int bodyWritten;
     bool * respDone, * reqDone;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048], raw_buff_aux[2048];
+    uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
     buffer read_buffer, write_buffer, aux_buffer;
 
 } client_t;
@@ -576,9 +576,11 @@ copy_w(struct selector_key *key) {
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0){
         selector_remove_interest(key->s, key->fd, OP_WRITE);
+        return COPY;
     }
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1) {
+        printf("%s\n", strerror(errno));
         return ERROR;
     } else {
         buffer_read_adv(b, n);

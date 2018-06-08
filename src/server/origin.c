@@ -108,7 +108,7 @@ typedef struct {
 
     int bodyWritten;
     bool * respDone, * reqDone;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048], raw_buff_aux[2048];
+    uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
     buffer read_buffer, write_buffer, aux_buffer;
 
 } client_t;
@@ -122,6 +122,8 @@ static void headers_flush(const unsigned state, struct selector_key *key);
 static unsigned headers_read(struct selector_key *key);
 
 static unsigned transform(struct selector_key *key);
+
+static void copy_init(const unsigned state, struct selector_key *key);
 
 static unsigned copy_r(struct selector_key *key);
 
@@ -158,6 +160,7 @@ static const struct state_definition origin_statbl[] = {
         .state            = TRANSFORM,
     //    .on_block_ready   = response_transform_done,    //TODO
     },{
+        .on_arrival       = copy_init,
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
         .state            = COPY,
@@ -281,6 +284,7 @@ static unsigned connected(struct selector_key *key){
 }
 
 static void headers_init(const unsigned state, struct selector_key *key) {
+    selector_set_interest(key->s,key->fd, OP_READ);
     origin_t * o = (origin_t*) key->data;
     o->parser.response = &o->response;
     response_parser_init(&o->parser);
@@ -320,7 +324,6 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     buffer* b    = o->rb;
     ssize_t size;
-    printf("flushing headers\n");
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     if(size < o->response.header_length){
@@ -328,6 +331,8 @@ static void headers_flush(const unsigned state, struct selector_key *key){
             ptr[i] = o->response.headers[i];
         }
     }
+    buffer_write_adv(b, o->response.header_length);
+    selector_set_interest(key->s, o->client_fd, OP_WRITE);
 }
 
 static unsigned copy(struct selector_key *key){
@@ -438,16 +443,30 @@ static void destroy(const unsigned state, struct selector_key *key){
     selector_notify_block(key->s, o->client_fd);
 }
 
+static void
+copy_init(const unsigned state, struct selector_key *key){
+
+}
+
 static unsigned
 copy_r(struct selector_key *key) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
+    buffer * b = o->rb;
+    ssize_t n, size, body, min;
 
-    size_t size;
-    ssize_t n;
-    buffer* b    = o->rb;
+    uint8_t * ptr = buffer_write_ptr(b, &size);
+    uint8_t * bodyPtr = buffer_read_ptr(&o->buff, &body);
+
+    min = size < body?size:body;
+
+    memcpy(ptr, bodyPtr, min);
+    buffer_write_adv(b, min);
+    buffer_read_adv(&o->buff,min);
+
+
     unsigned ret = COPY;
 
-    uint8_t *ptr = buffer_write_ptr(b, &size);
+    ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
     if(n <= 0) {
         return RESPONSE_ERROR;
