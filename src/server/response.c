@@ -18,6 +18,10 @@ encoding(const uint8_t c, struct response_parser* p);
 static enum response_state
 enter(const uint8_t c, struct response_parser* p);
 
+
+static void
+response_reset_buffer(struct response_parser* p);
+
 bool
 body_is_done(struct response_parser *p, int length) {
     increase_body_length(p, -length);
@@ -31,8 +35,8 @@ increase_body_length(struct response_parser *p, int length) {
 }
 
 bool
-chunked_is_done(char* buffer, int length) {
-  char * end = buffer + length - 4;
+chunked_is_done(uint8_t * buffer, int length) {
+  uint8_t * end = buffer + length - 4;
   return *end == '\r' && *(end+1) == '\n' && *(end + 2) == '\r' && *(end + 3) == '\n';
 }
 
@@ -55,7 +59,7 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
 }
 
 void
-parser_headers(struct response_parser *p, char* ptr) {
+parser_headers(struct response_parser *p, uint8_t * ptr) {
     p->response->headers = ptr;
 }
 

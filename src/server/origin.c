@@ -269,11 +269,12 @@ static const struct fd_handler origin_handler = {
 };
 
 static unsigned connected(struct selector_key *key){
-    int error = 0, len = 0;
+    int error = 0;
+    socklen_t len;
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
-            origin_t * o = (origin_t*) key->data;
+//            origin_t * o = (origin_t*) key->data;
             printf("connected\n");
             //selector_notify_block(key->s,o->client_fd);
             //selector_set_interest_key(key, OP_READ);
@@ -295,9 +296,9 @@ static void headers_init(const unsigned state, struct selector_key *key) {
 static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     size_t size = BUFF_SIZE;
-    char * ptr = buffer_write_ptr(&o->buff,&size);
+    uint8_t * ptr = buffer_write_ptr(&o->buff, &size);
     printf("header read\n");
-    int read = recv(o->origin_fd, ptr, size, 0);
+    ssize_t read = recv(o->origin_fd, ptr, size, 0);
 
     bool error;
     if(!o->readFirst){
@@ -311,7 +312,7 @@ static unsigned headers_read(struct selector_key *key){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
-            int length = 0;
+            size_t length = 0;
             buffer_read_ptr(&o->buff, &length);
             increase_body_length(&o->parser, -length);
             return COPY;
@@ -323,7 +324,7 @@ static unsigned headers_read(struct selector_key *key){
 static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     buffer* b    = o->rb;
-    ssize_t size;
+    size_t size;
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     if(size > o->response.header_length){
@@ -335,46 +336,8 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     selector_set_interest(key->s, o->client_fd, OP_WRITE);
 }
 
-static unsigned copy(struct selector_key *key){
-        char buffer[BUFF_SIZE];
-        origin_t * o = (origin_t*) key->data;
-        int sent = 0;
-        int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
-        buffer[recvd] = 0;
-        if(recvd > 0){
-
-            bool done = false;
-            if(o->response.chunked){
-                done = chunked_is_done(buffer, recvd);
-            } else {
-                done = body_is_done(&o->parser, recvd);
-            }
-            sent = send(o->client_fd, buffer, recvd, 0);
-            if(done){
-                selector_notify_block(key->s, o->client_fd);
-                return RESPONSE_DONE;
-            }
-            return COPY;
-          }
-
-        return RESPONSE_DONE;
-}
-
 static unsigned transform(struct selector_key *key){
-        char buffer[BUFF_SIZE];
-        origin_t * o = (origin_t*) key->data;
-        int sent = 0;
-        int recvd = recv(o->origin_fd, buffer, BUFF_SIZE, 0);
-        if(read > 0){
-            bool done;
-            if(o->response.chunked){
-                done = chunked_is_done(buffer, recvd);
-            } else {
-                // done = body_is_done(buffer, recvd);
-            }
-            sent = send(o->client_fd, buffer, recvd, 0);
-            return done?RESPONSE_DONE:COPY;
-        }
+
         return RESPONSE_DONE;
 }
 
@@ -393,7 +356,7 @@ void request_connect(struct selector_key *key, request_st *d) {
     if (selector_fd_set_nio(*fd) == -1) {
         goto finally;
     }
-    if (-1 == connect(*fd, (struct sockaddr_in *)&CLIENT_ATTACHMENT(key)->origin_addr,
+    if (-1 == connect(*fd, (struct sockaddr*) &CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
             selector_status st = selector_set_interest_key(key, OP_NOOP);
@@ -452,7 +415,8 @@ static unsigned
 copy_r(struct selector_key *key) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
     buffer * b = o->rb;
-    ssize_t n, size, body, min;
+    ssize_t n, min;
+    size_t size, body;
 
     uint8_t * ptr = buffer_write_ptr(b, &size);
     uint8_t * bodyPtr = buffer_read_ptr(&o->buff, &body);
@@ -462,9 +426,6 @@ copy_r(struct selector_key *key) {
     memcpy(ptr, bodyPtr, min);
     buffer_write_adv(b, min);
     buffer_read_adv(&o->buff,min);
-
-
-    unsigned ret = COPY;
 
     ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
@@ -493,7 +454,6 @@ copy_w(struct selector_key *key) {
     size_t size;
     ssize_t n;
     buffer* b = o->wb;
-    unsigned ret = COPY;
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0){
         selector_remove_interest(key->s, key->fd, OP_WRITE);
@@ -501,7 +461,7 @@ copy_w(struct selector_key *key) {
     }
 
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-    printf("SENT:%d\n", n);
+    printf("SENT:%ld\n", n);
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {

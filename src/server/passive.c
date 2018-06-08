@@ -402,8 +402,8 @@ request_read(struct selector_key *key) {
         buffer_write_adv(b, n);
         int st = request_consume(b, &d->parser, &error);
         if(d->parser.request->method == CONNECT) {
-            int length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
-            return DONE;
+            ssize_t length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
+            return length >= 0 ? DONE : ERROR;
         }
         if(request_is_done( &d->parser, st, 0)) {
             selector_set_interest_key(key, OP_NOOP);
@@ -500,44 +500,8 @@ request_read_close(const unsigned state, struct selector_key *key) {
 }
 
 static unsigned
-request_write(struct selector_key *key) {
-    request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-    client_t * s = CLIENT_ATTACHMENT(key);
-    int length;
-
-
-    int n = send(s->origin_fd, d->request.headers, d->request.headers_length, MSG_NOSIGNAL);
-
-    if(n == -1) {
-        return ERROR;
-    } else if(n != d->request.headers_length) {
-        d->request.headers += n;    //A lo cabeza avanzo el buffer que tiene la parte "parseada" del request
-                                                // para que cuando vuelva no envie de nuevo lo mismo
-        d->request.headers_length -= n;
-        return COPY;
-    }
-
-    uint8_t* ptr = buffer_read_ptr(d->rb, &length);
-    n = send(s->origin_fd, ptr, length, MSG_NOSIGNAL);
-
-    if(n == -1) {
-
-        if(errno == EWOULDBLOCK)
-            return COPY;
-        else
-            return ERROR;
-
-    } else if(n != length) {
-        buffer_read_adv(d->rb, n);
-        return COPY;
-    }
-    //printf("returning from request_write with: WAITING\n");
-    return WAITING;
-}
-
-static unsigned
 destroy(struct selector_key *key){
-    client_t * c = CLIENT_ATTACHMENT(key);
+//    client_t * c = CLIENT_ATTACHMENT(key);
     return DONE;
 }
 
@@ -548,7 +512,6 @@ copy_r(struct selector_key *key) {
     size_t size;
     ssize_t n;
     buffer* b    = &c->read_buffer;
-    unsigned ret = COPY;
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
@@ -560,7 +523,7 @@ copy_r(struct selector_key *key) {
     selector_add_interest(key->s,c->origin_fd, OP_WRITE);
     c->bodyWritten += n;
     //if(c->bodyWritten == c->client.request.request.content_length)
-    printf("holsi\n");
+//    printf("holsi\n");
     *c->reqDone = true;
     return COPY;
 }
@@ -573,7 +536,6 @@ copy_w(struct selector_key *key) {
     size_t size;
     ssize_t n;
     buffer* b = &c->write_buffer;
-    unsigned ret = COPY;
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0){

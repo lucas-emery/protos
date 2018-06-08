@@ -16,7 +16,7 @@ struct response {
     char* length;
     char* mediaType;
     int chunked;
-    char* headers;
+    uint8_t * headers;
     int header_length;
     int body_length;
 };
@@ -58,8 +58,6 @@ response_parser_feed (struct response_parser *p, const uint8_t c);
 void
 response_log();
 
-static void
-response_reset_buffer(struct response_parser* p);
 
 /**
  * Permite distinguir a quien usa parser_feed si debe seguir
@@ -90,7 +88,7 @@ void
 increase_body_length(struct response_parser *p, int length);
 
 void
-parser_headers(struct response_parser *p, char* ptr);
+parser_headers(struct response_parser *p, uint8_t * ptr);
 
 bool
-chunked_is_done(char* buffer, int length);
+chunked_is_done(uint8_t * buffer, int length);
