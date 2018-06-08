@@ -18,17 +18,21 @@ static unsigned sctp_request_read(struct selector_key *key) {
     struct sctp_sndrcvinfo sndrcvinfo;
     int flags, n;
 
-    n = sctp_recvmsg(key->fd, d->read_buffer, sizeof(d->read_buffer), (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
+    bzero(d->read_buffer, MAX_BUFFER_SIZE);
+    n = sctp_recvmsg(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
     if(n > 0) {
     	if(sctp_request_parser(d->read_buffer, d->write_buffer, n) > 0) {
         	selector_set_interest_key(key, OP_WRITE);
-        	return SCTP_REQUEST_WRITE;
+        	return SCTP_WRITE;
         }
         else
-        	return SCTP_ERROR;
+            return SCTP_ERROR;
     }
     else
+    {
+    	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
+    }
 }
 
 static void sctp_request_read_close(const unsigned state, struct selector_key *key) {
@@ -38,7 +42,7 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    int n = sctp_sendmsg(key->fd, (void *) d->write_buffer, sizeof(d->write_buffer), NULL, 0, 0, 0, 0, 0, 0);
+    int n = sctp_sendmsg(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, 0, 0, 0, 0, 0);
     if(n == -1) {
         return SCTP_ERROR;
     }
@@ -49,12 +53,12 @@ static unsigned sctp_request_write(struct selector_key *key) {
 
 static const struct state_definition sctp_client_statbl[] = {
     {
-        .state            = SCTP_REQUEST_READ,
+        .state            = SCTP_READ,
         .on_arrival       = sctp_request_init,
         .on_departure     = sctp_request_read_close,
         .on_read_ready    = sctp_request_read,
     },{
-        .state            = SCTP_REQUEST_WRITE,
+        .state            = SCTP_WRITE,
         .on_write_ready   = sctp_request_write,
     },{
         .state            = SCTP_DONE,
@@ -81,13 +85,13 @@ static sctp_client_t * sctp_client_new(int client_fd) {
     ret->client_fd       = client_fd;
     ret->client_addr_len = sizeof(ret->client_addr);
 
-    ret->stm    .initial   = SCTP_REQUEST_READ;
+    ret->stm    .initial   = SCTP_READ;
     ret->stm    .max_state = SCTP_ERROR;
     ret->stm    .states    = sctp_client_describe_states();
     stm_init(&ret->stm);
 
-    ret->read_buffer = malloc(sizeof(uint8_t)*1024);
-    ret->write_buffer = malloc(sizeof(uint8_t)*1024);
+    ret->read_buffer = malloc(MAX_BUFFER_SIZE);
+    ret->write_buffer = malloc(MAX_BUFFER_SIZE);
 
 finally:
     return ret;
@@ -106,7 +110,7 @@ static void sctp_client_done(struct selector_key* key) {
 
 static void sctp_client_read(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
-    const sctp_sock_state_t st = stm_handler_read(stm, key);
+    const sctp_sock_state_t st = (const sctp_sock_state_t) stm_handler_read(stm, key);
 
     if(SCTP_ERROR == st || SCTP_DONE == st) {
         sctp_client_done(key);
@@ -115,7 +119,7 @@ static void sctp_client_read(struct selector_key *key) {
 
 static void sctp_client_write(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
-    const sctp_sock_state_t st = stm_handler_write(stm, key);
+    const sctp_sock_state_t st = (const sctp_sock_state_t) stm_handler_write(stm, key);
 
     if(SCTP_ERROR == st || SCTP_DONE == st) {
         sctp_client_done(key);
@@ -124,7 +128,7 @@ static void sctp_client_write(struct selector_key *key) {
 
 static void sctp_client_block(struct selector_key *key) {
     struct state_machine *stm   = &CLIENT_ATTACHMENT(key)->stm;
-    const sctp_sock_state_t st = stm_handler_block(stm, key);
+    const sctp_sock_state_t st = (const sctp_sock_state_t) stm_handler_block(stm, key);
 
     if(SCTP_ERROR == st || SCTP_DONE == st) {
         sctp_client_done(key);
@@ -186,15 +190,13 @@ fail:
 int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 	int i, read_pos = 0, write_pos = 0;
 	char metric[4];
-	/*
+	
 	for(i=0; i<PASSWORD_SIZE; i++) {
 		if(password[i] != read_buffer[read_pos++]) {
 			return 0;
 		}
 	}
-	*/
 
-	printf("Llegamos re lejos\n");
 
 	while(read_pos < n) {
 		switch(read_buffer[read_pos++]) {

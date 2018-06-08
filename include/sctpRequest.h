@@ -24,8 +24,9 @@
 #define METRIC_SIZE 4
 #define METRIC '0'
 #define CONFIGURATION '1'
-#define METRIC_ERROR 1
+#define METRIC_ERROR 2
 #define CONFIGURATION_ERROR 3
+#define MAX_BUFFER_SIZE 1024
 
 
 typedef struct {
@@ -52,8 +53,8 @@ typedef struct {
 } sctp_client_t;
 
 typedef enum {
-	SCTP_REQUEST_READ,
-	SCTP_REQUEST_WRITE,
+	SCTP_READ,
+	SCTP_WRITE,
 	SCTP_DONE,
 	SCTP_ERROR
 } sctp_sock_state_t;

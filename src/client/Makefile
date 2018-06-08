@@ -4,9 +4,8 @@ CFLAGS=-I$(IDIR)
 
 SRCS=$(wildcard *.c)
 OBJS=$(SRCS:.c=.o)
-LDIR=../lib
 
-LIBS=-lm
+CLIBS=-lsctp
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -14,7 +13,7 @@ LIBS=-lm
 default: all
 
 all:	$(OBJS)
-	$(CC) -o ../../client $^ $(CFLAGS)
+	$(CC) -o ../../client $^ $(CFLAGS) $(CLIBS)
 	rm *.o
 
 .PHONY: clean
