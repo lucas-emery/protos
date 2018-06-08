@@ -213,5 +213,9 @@ int main(const int argc, const char **argv){
             DieWithUserMessage("ded", "serving");
         }
     }
+    if(selector != NULL) {
+        selector_destroy(selector);
+    }
+    selector_close();
     return 0;
 }

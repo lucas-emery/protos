@@ -270,12 +270,12 @@ static const struct fd_handler origin_handler = {
 
 static unsigned connected(struct selector_key *key){
     int error = 0;
-    socklen_t len;
+    socklen_t len = 0;
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
 //            origin_t * o = (origin_t*) key->data;
-            printf("connected\n");
+//            printf("connected\n");
             //selector_notify_block(key->s,o->client_fd);
             //selector_set_interest_key(key, OP_READ);
             return COPY;
@@ -297,7 +297,7 @@ static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     size_t size = BUFF_SIZE;
     uint8_t * ptr = buffer_write_ptr(&o->buff, &size);
-    printf("header read\n");
+//    printf("header read\n");
     ssize_t read = recv(o->origin_fd, ptr, size, 0);
 
     bool error;
@@ -308,7 +308,7 @@ static unsigned headers_read(struct selector_key *key){
 
     if(read > 0){
 
-        printf("reading response headers\n");
+//        printf("reading response headers\n");
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
@@ -461,7 +461,7 @@ copy_w(struct selector_key *key) {
     }
 
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-    printf("SENT:%ld\n", n);
+//    printf("SENT:%ld\n", n);
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
@@ -469,7 +469,7 @@ copy_w(struct selector_key *key) {
     }
 
     if(*o->reqDone && !*o->respDone){
-        printf("reqdone\n");
+//        printf("reqdone\n");
         return HEADERS;
     }
 

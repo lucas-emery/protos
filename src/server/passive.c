@@ -247,10 +247,12 @@ static unsigned request_resolv(struct selector_key * key, request_st * d);
 
 static void client_destroy(client_t* s) {
     if(s->origin_resolution != NULL) {
-        //freeaddrinfo(s->origin_resolution);
+        freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
-    //free(s);
+    free(s->reqDone);
+    free(s->respDone);
+    free(s);
 }
 
 static void client_read(struct selector_key *key);
@@ -544,7 +546,7 @@ copy_w(struct selector_key *key) {
     }
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1) {
-        printf("%s\n", strerror(errno));
+//        printf("%s\n", strerror(errno));
         return ERROR;
     } else {
         buffer_read_adv(b, n);
