@@ -134,8 +134,8 @@ typedef struct {
 
     int bodyWritten;
     bool * respDone, * reqDone;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
-    buffer read_buffer, write_buffer;
+    uint8_t raw_buff_a[2048], raw_buff_b[2048], raw_buff_aux[2048];
+    buffer read_buffer, write_buffer, aux_buffer;
 
 } client_t;
 
@@ -236,6 +236,7 @@ static client_t * client_new(int client_fd) {
     ret->respDone = malloc(sizeof(bool));
     buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
     buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
+    buffer_init(&ret->aux_buffer, N(ret->raw_buff_aux), ret->raw_buff_aux);
 
     return ret;
 }
@@ -357,7 +358,6 @@ static void client_done(struct selector_key* key) {
 static void
 request_init(const unsigned state, struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-
     d->rb              = &(CLIENT_ATTACHMENT(key)->read_buffer);
     d->wb              = &(CLIENT_ATTACHMENT(key)->write_buffer);
     d->parser.request  = &d->request;
@@ -374,17 +374,27 @@ request_init(const unsigned state, struct selector_key *key) {
 
 static unsigned
 request_read(struct selector_key *key) {
+    client_t * c = CLIENT_ATTACHMENT(key);
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-    printf("Writing on %p\n", d->rb);
       buffer *b     = d->rb;
     unsigned  ret   = REQUEST_HEADERS;
         bool  error = false;
-     uint8_t *ptr;
-      size_t  count;
+     uint8_t *ptr, *auxPtr;
+      size_t  count, auxCount;
      ssize_t  n;
 
     ptr = buffer_write_ptr(b, &count);
     n = recv(key->fd, ptr, count, 0);
+    auxPtr = buffer_write_ptr(&c->aux_buffer, &auxCount);
+
+    if(n > auxCount)
+        return ERROR;
+
+    memcpy(auxPtr, ptr, n);
+
+    buffer_write_adv(b,n);
+
+    b = &c->aux_buffer;
 
     if(n > 0) {
         buffer_write_adv(b, n);
@@ -471,6 +481,9 @@ request_resolv_done(struct selector_key *key) {
         freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
+
+
+
     request_connect(key, d);
     selector_set_interest_key(key, OP_NOOP);
     return COPY;
@@ -479,7 +492,8 @@ request_resolv_done(struct selector_key *key) {
 static void
 request_read_close(const unsigned state, struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-
+    client_t *c      =  CLIENT_ATTACHMENT(key);
+    *c->reqDone = true;
     request_close(&d->parser);
 }
 
@@ -543,8 +557,9 @@ copy_r(struct selector_key *key) {
     }
     selector_add_interest(key->s,c->origin_fd, OP_WRITE);
     c->bodyWritten += n;
-    //if(c->bodyWritten == c->client.request.request.contentLength)
-    //    *c->reqDone = true;
+    //if(c->bodyWritten == c->client.request.request.content_length)
+    printf("holsi\n");
+    *c->reqDone = true;
     return COPY;
 }
 

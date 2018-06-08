@@ -108,8 +108,8 @@ typedef struct {
 
     int bodyWritten;
     bool * respDone, * reqDone;
-    uint8_t raw_buff_a[2048], raw_buff_b[2048];
-    buffer read_buffer, write_buffer;
+    uint8_t raw_buff_a[2048], raw_buff_b[2048], raw_buff_aux[2048];
+    buffer read_buffer, write_buffer, aux_buffer;
 
 } client_t;
 
@@ -267,11 +267,11 @@ static const struct fd_handler origin_handler = {
 
 static unsigned connected(struct selector_key *key){
     int error = 0, len = 0;
-    printf("connected\n");
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
             origin_t * o = (origin_t*) key->data;
+            printf("connected\n");
             //selector_notify_block(key->s,o->client_fd);
             //selector_set_interest_key(key, OP_READ);
             return COPY;
@@ -374,7 +374,7 @@ static unsigned transform(struct selector_key *key){
 }
 
 void request_connect(struct selector_key *key, request_st *d) {
-    client_t * s = (client_t*) key->data;
+    client_t * s = CLIENT_ATTACHMENT(key);
     bool error                  = false;
     // da legibilidad
     enum socks_response_status status =  d->status;
@@ -408,7 +408,6 @@ void request_connect(struct selector_key *key, request_st *d) {
             state->respDone = s->respDone;
             state->reqDone = s->reqDone;
             state->wb = &s->read_buffer;
-            printf("assigning %p\n", &s->read_buffer);
             state->rb = &s->write_buffer;
         } else {
             status = errno_to_socks(errno);
@@ -476,23 +475,24 @@ copy_w(struct selector_key *key) {
     ssize_t n;
     buffer* b = o->wb;
     unsigned ret = COPY;
-    printf("using buffer: %p\n", o->wb);
     uint8_t *ptr = buffer_read_ptr(b, &size);
-    printf("done\n");
     if(size == 0){
         selector_remove_interest(key->s, key->fd, OP_WRITE);
         return COPY;
     }
-    printf("%s\n", ptr);
+
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
+    printf("SENT:%d\n", n);
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
         buffer_read_adv(b, n);
     }
 
-    if(*o->reqDone && !*o->respDone)
+    if(*o->reqDone && !*o->respDone){
+        printf("reqdone\n");
         return HEADERS;
+    }
 
     if(*o->respDone && *o->reqDone)
         return RESPONSE_DONE;
