@@ -234,6 +234,8 @@ static client_t * client_new(int client_fd) {
 
     ret->reqDone = malloc(sizeof(bool));
     ret->respDone = malloc(sizeof(bool));
+    *ret->reqDone = false;
+    *ret->respDone = false;
     buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
     buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
     buffer_init(&ret->aux_buffer, N(ret->raw_buff_aux), ret->raw_buff_aux);

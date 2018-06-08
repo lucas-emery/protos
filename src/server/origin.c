@@ -326,7 +326,7 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     ssize_t size;
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
-    if(size < o->response.header_length){
+    if(size > o->response.header_length){
         for (size_t i = 0; i < o->response.header_length; i++) {
             ptr[i] = o->response.headers[i];
         }
