@@ -27,6 +27,7 @@
 #define METRIC_ERROR 2
 #define CONFIGURATION_ERROR 3
 #define MAX_BUFFER_SIZE 1024
+#define MEDIATYPE_SIZE 20
 
 
 typedef struct {
@@ -61,7 +62,7 @@ typedef enum {
 
 int sctp_request_parser(char * read_buffer, char * write_buffer, int n);
 void getMetric(char type, char * metric);
-int applyFilter(char type);
+int applyFilter(char type, char * mediaType);
 void sctp_socks_accept(struct selector_key *key);
 
 #endif

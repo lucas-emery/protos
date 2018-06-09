@@ -19,5 +19,6 @@ int getParams(int cantParams, char const *params[], char buffer[]);
 void parseResponse(char * buffer, int requests);
 void DieWithSystemMessage(const char *msg);
 void DieWithUserMessage(const char *msg, const char *detail);
+int isMediaType(const char * param);
 
 #endif

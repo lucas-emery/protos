@@ -30,6 +30,7 @@ static unsigned sctp_request_read(struct selector_key *key) {
     }
     else
     {
+        printf("%d\n", n);
     	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
     }
@@ -189,7 +190,7 @@ fail:
 
 int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 	int i, read_pos = 0, write_pos = 0;
-	char metric[4];
+	char metric[METRIC_SIZE], type, mediaType[MEDIATYPE_SIZE];
 	
 	for(i=0; i<PASSWORD_SIZE; i++) {
 		if(password[i] != read_buffer[read_pos++]) {
@@ -201,11 +202,12 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 	while(read_pos < n) {
 		switch(read_buffer[read_pos++]) {
 			case METRIC:
+                type = read_buffer[read_pos++];
 				bzero(metric, sizeof(metric));
-				getMetric(read_buffer[read_pos], metric);
+				getMetric(type, metric);
 				if(metric != 0) {
-					write_buffer[write_pos++] = read_buffer[read_pos-1]; //escribe que es una metrica
-					write_buffer[write_pos++] = read_buffer[read_pos++]; //escribe que tipo de metrica					
+					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
+					write_buffer[write_pos++] = type; //escribe que tipo de metrica					
 					write_buffer[write_pos++] = metric[0];
 					write_buffer[write_pos++] = metric[1];
 					write_buffer[write_pos++] = metric[2];
@@ -217,13 +219,21 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 				}
 			break;
 			case CONFIGURATION:
-				if(applyFilter(read_buffer[read_pos])) {
-					write_buffer[write_pos++] = read_buffer[read_pos-1]; //escribe que es una configuracion
-					write_buffer[write_pos++] = read_buffer[read_pos++]; //escribe que tipo de configuracion
+                type = read_buffer[read_pos++];
+                bzero(mediaType, MEDIATYPE_SIZE);
+                i = 0;
+                while(read_buffer[read_pos] != ' ') {
+                    mediaType[i++] = read_buffer[read_pos++];
+                }
+                mediaType[i] = 0;
+                read_pos++;
+				if(applyFilter(type, mediaType)) {
+					write_buffer[write_pos++] = CONFIGURATION; //escribe que es una configuracion
+					write_buffer[write_pos++] = type; //escribe que tipo de configuracion
 				}
 				else {
 					write_buffer[write_pos++] = CONFIGURATION_ERROR;
-					write_buffer[write_pos++] = read_buffer[read_pos++];
+					write_buffer[write_pos++] = type;
 				}
 			break;
 		}
@@ -246,6 +256,6 @@ void getMetric(char type, char * metric) {
   }
 }
 
-int applyFilter(char type) {
+int applyFilter(char type, char * mediaType) {
   return 1;
 }

@@ -10,7 +10,6 @@ int main(int argc, char const *argv[]) {
 
 	bzero(bufferAux, MAX_BUFFER);
 	if(getParams(argc, argv, bufferAux) == 1) {
-		printf("Error de parametro\n");
 		return 1;
 	}
 
@@ -41,7 +40,7 @@ int main(int argc, char const *argv[]) {
 	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	ret = connect(sock, (struct sockaddr *) &servaddr, sizeof (servaddr));
-
+	sleep(1);
 	if (ret < 0)
 	  DieWithSystemMessage("connect() failed");
 
@@ -50,7 +49,7 @@ int main(int argc, char const *argv[]) {
 	strcat(buffer, bufferAux);
 	size_t datalen = strlen(buffer);
 	ret = sctp_sendmsg(sock, (void *) buffer, datalen, NULL, 0, 0, 0, 0, 0, 0);
-	printf("%s\n", buffer);
+	printf("datalen: %lu\t%s\n",datalen, buffer);
 
 	if(ret < 0 )
 		DieWithSystemMessage("send() failed");
@@ -97,40 +96,117 @@ int getParams(int cantParams, char const *params[], char buffer[]) {
 								buffer[pos++] = '3';
 							break;
 							default:
+								printf("Error de parametro\n");
 								return 1;
 						}
 					break;
 					case 'c':
 						switch(params[i][2]) {
 							case '1':
-								buffer[pos++] = '1';
-								buffer[pos++] = '1';
+								if(i < cantParams-1) {
+									i++;
+									buffer[pos++] = '1';
+									buffer[pos++] = '1';
+									if(isMediaType(params[i])) {
+										strcat(buffer, params[i]);
+										pos += strlen(params[i]);
+										buffer[pos++] = ' ';
+									} else {
+										printf("Error de media type\n");
+										return 1;
+									}
+								} else {
+									printf("Error de parametro\n");
+									return 1;
+								}
 							break;
 							case '2':
-								buffer[pos++] = '1';
-								buffer[pos++] = '2';
+								if(i < cantParams-1) {
+									i++;
+									buffer[pos++] = '1';
+									buffer[pos++] = '2';
+									if(isMediaType(params[i])) {
+										strcat(buffer, params[i]);
+										pos += strlen(params[i]);
+										buffer[pos++] = ' ';
+									} else {
+										printf("Error de media type\n");
+										return 1;
+									}
+								} else {
+									printf("Error de parametro\n");
+									return 1;
+								}
 							break;
 							case '3':
-								buffer[pos++] = '1';
-								buffer[pos++] = '3';
+								if(i < cantParams-1) {
+									i++;
+									buffer[pos++] = '1';
+									buffer[pos++] = '3';
+									if(isMediaType(params[i])) {
+										strcat(buffer, params[i]);
+										pos += strlen(params[i]);
+										buffer[pos++] = ' ';
+									} else {
+										printf("Error de media type\n");
+										return 1;
+									}
+								} else {
+									printf("Error de parametro\n");
+									return 1;
+								}
 							break;
 							default:
+								printf("Error de parametro\n");
 								return 1;
 						}
 					break;
 					default:
+						printf("Error de parametro\n");
 						return 1;
 				}
 			}
 			else {
+				printf("Error de parametro\n");
 				return 1;
 			}
 		} 
 		else {
+			printf("Error de parametro\n");
 			return 1;
 		}
 	}
 	return 0;
+}
+
+int isMediaType(const char * param) {
+	int j = 0;
+	int len = strlen(param);
+	char c;
+	while(j < len) {
+		c = param[j];
+		if(c >= 'a' && c<= 'z') {
+			j++;
+		} else if(param[j] == '/') {
+			j++;
+			break;
+		} else {
+			return 0;
+		}
+	}
+	if(j < len) {
+		while(j < len) {
+			c = param[j];
+			if(c >= 'a' && c<= 'z') {
+				j++;
+			} else {
+				return 0;
+			}
+		}
+	} else {
+		return 0;
+	}
+	return 1;
 }
 
 void parseResponse(char * buffer, int requests) {
