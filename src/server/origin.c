@@ -22,6 +22,7 @@
 #define CLIENT_ATTACHMENT(key) ( (client_t *)(key)->data)
 
 void startTime();
+unsigned init_transform(struct selector_key *key);
 void printDeltaTime();
 
 enum type{
@@ -51,13 +52,15 @@ typedef enum {
 typedef struct {
     int origin_fd;
     int client_fd;
+    int infd, outfd;
     buffer buff;
     struct response response;
     struct response_parser parser;
     bool readFirst;
 
-    buffer *rb , *wb;
+    buffer *rb , *wb, *tb;
     bool * respDone, *reqDone;
+    uint8_t  raw_data[BUFF_SIZE];
 
 
     struct state_machine stm;
@@ -123,8 +126,6 @@ static unsigned headers_read(struct selector_key *key);
 
 static unsigned transform(struct selector_key *key);
 
-static void copy_init(const unsigned state, struct selector_key *key);
-
 static unsigned copy_r(struct selector_key *key);
 
 static unsigned copy_w(struct selector_key *key);
@@ -160,7 +161,6 @@ static const struct state_definition origin_statbl[] = {
         .state            = TRANSFORM,
     //    .on_block_ready   = response_transform_done,    //TODO
     },{
-        .on_arrival       = copy_init,
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
         .state            = COPY,
@@ -195,6 +195,8 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 
     ret->origin_fd = origin_fd;
     ret->client_fd = client_fd;
+    ret->infd = -1;
+    ret->outfd = -1;
 
     ret->stm.initial = CONNECTING;
     ret->stm.max_state = RESPONSE_ERROR;
@@ -205,7 +207,6 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 }
 
 static void origin_done(struct selector_key* key) {
-    //printf("origin ded\n");
     const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
@@ -275,7 +276,6 @@ static unsigned connected(struct selector_key *key){
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
 //            origin_t * o = (origin_t*) key->data;
-//            printf("connected\n");
             //selector_notify_block(key->s,o->client_fd);
             //selector_set_interest_key(key, OP_READ);
             return COPY;
@@ -297,7 +297,6 @@ static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     size_t size = BUFF_SIZE;
     uint8_t * ptr = buffer_write_ptr(&o->buff, &size);
-//    printf("header read\n");
     ssize_t read = recv(o->origin_fd, ptr, size, 0);
 
     bool error;
@@ -307,14 +306,18 @@ static unsigned headers_read(struct selector_key *key){
     }
 
     if(read > 0){
-
-//        printf("reading response headers\n");
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             size_t length = 0;
             buffer_read_ptr(&o->buff, &length);
             increase_body_length(&o->parser, -length);
+            bool transform = false;
+            if(transform) {//if transform
+                init_transform(key);
+                selector_remove_interest(key->s, key->fd, OP_WRITE);
+                return COPY;
+            }
             return COPY;
         }
     }
@@ -402,19 +405,13 @@ finally:
 
 static void destroy(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    //printf("Killing %d\n",o->origin_fd );
     selector_notify_block(key->s, o->client_fd);
-}
-
-static void
-copy_init(const unsigned state, struct selector_key *key){
-
 }
 
 static unsigned
 copy_r(struct selector_key *key) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
-    buffer * b = o->rb;
+    buffer * b = o->tb == NULL?o->rb:o->tb;
     ssize_t n, min;
     size_t size, body;
 
@@ -429,12 +426,19 @@ copy_r(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n <= 0) {
+    if(n < 0) {
         return RESPONSE_ERROR;
     } else {
         buffer_write_adv(b, n);
     }
-    selector_add_interest(key->s,o->client_fd, OP_WRITE);
+    if(o->infd == -1 || o->outfd == -1) {
+        selector_remove_interest(key->s, o->infd, OP_WRITE);
+        selector_add_interest(key->s, o->client_fd, OP_WRITE);
+    }else{
+        selector_remove_interest(key->s,o->client_fd,OP_WRITE);
+        selector_add_interest(key->s, o->infd, OP_WRITE);
+    }
+
     bool done = false;
 
     if(o->response.chunked){
@@ -461,7 +465,6 @@ copy_w(struct selector_key *key) {
     }
 
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
-//    printf("SENT:%ld\n", n);
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
@@ -469,7 +472,6 @@ copy_w(struct selector_key *key) {
     }
 
     if(*o->reqDone && !*o->respDone){
-//        printf("reqdone\n");
         return HEADERS;
     }
 
