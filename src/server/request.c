@@ -65,7 +65,7 @@ request_is_done(struct request_parser *p, const enum request_state st, bool *err
 }
 
 void
-request_close(struct request_parser *p) {
+request_clean(struct request_parser *p) {
     free(p->buffer);
 }
 

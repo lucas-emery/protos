@@ -155,7 +155,7 @@ void request_connect(struct selector_key *key, request_st *d);
 
 static void request_init(const unsigned state, struct selector_key *key);
 
-static void request_read_close(const unsigned state, struct selector_key *key);
+static void request_read_done(struct selector_key *key);
 
 static unsigned request_read(struct selector_key *key);
 
@@ -495,11 +495,11 @@ request_resolv_done(struct selector_key *key) {
 }
 
 static void
-request_read_close(const unsigned state, struct selector_key *key) {
+request_read_done(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t *c      =  CLIENT_ATTACHMENT(key);
     *c->reqDone = true;
-    request_close(&d->parser);
+    request_clean(&d->parser);
 }
 
 static unsigned
@@ -526,7 +526,7 @@ copy_r(struct selector_key *key) {
     selector_add_interest(key->s,c->origin_fd, OP_WRITE);
     c->bodyWritten += n;
     if(c->bodyWritten == c->client.request.request.content_length) {
-        *c->reqDone = true;
+        request_read_done(key);
     }
     return COPY;
 }
@@ -542,7 +542,7 @@ copy_w(struct selector_key *key) {
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0) {
-        //selector_remove_interest(key->s, key->fd, OP_WRITE);
+        selector_remove_interest(key->s, key->fd, OP_WRITE);
         if(*c->respDone && *c->reqDone) {
             return DONE;
         } else {
@@ -551,7 +551,6 @@ copy_w(struct selector_key *key) {
     }
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1) {
-//        printf("%s\n", strerror(errno));
         return ERROR;
     } else {
         buffer_read_adv(b, n);
