@@ -11,7 +11,7 @@
 
 #include "request.h"
 #include "buffer.h"
-
+#include "log.h"
 #include "stm.h"
 #include "passive.h"
 #include "netutils.h"
@@ -240,6 +240,7 @@ static client_t * client_new(int client_fd) {
     buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
     buffer_init(&ret->aux_buffer, N(ret->raw_buff_aux), ret->raw_buff_aux);
 
+
     return ret;
 }
 
@@ -294,6 +295,9 @@ void socks_passive_accept(struct selector_key *key){
     memcpy(&state->client_addr, &client_addr, client_addr_len);
     state->client_addr_len = client_addr_len;
 
+    proxy_data[state->client_fd].client_addr = state->client_addr;
+    gettimeofday(&proxy_data[state->client_fd].start, NULL);
+
     if(selector_register(key->s, client, &client_handler, OP_READ, state) != SELECTOR_SUCCESS){
         goto fail;
     }
@@ -343,7 +347,8 @@ static void client_close(struct selector_key *key) {
 }
 
 static void client_done(struct selector_key* key) {
-    //printf("client ded\n");
+    log_request(proxy_data[CLIENT_ATTACHMENT(key)->client_fd]);
+
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,
         CLIENT_ATTACHMENT(key)->origin_fd,
@@ -368,7 +373,6 @@ request_init(const unsigned state, struct selector_key *key) {
     d->wb              = &(CLIENT_ATTACHMENT(key)->write_buffer);
     d->parser.request  = &d->request;
     d->status          = status_general_SOCKS_server_failure;
-    //d->request.dest_port = htons(80);
     request_parser_init(&d->parser);
     d->client_fd       = &CLIENT_ATTACHMENT(key)->client_fd;
     d->origin_fd       = &CLIENT_ATTACHMENT(key)->origin_fd;
@@ -376,6 +380,7 @@ request_init(const unsigned state, struct selector_key *key) {
     d->origin_addr     = &CLIENT_ATTACHMENT(key)->origin_addr;
     d->origin_addr_len = &CLIENT_ATTACHMENT(key)->origin_addr_len;
     d->origin_domain   = &CLIENT_ATTACHMENT(key)->origin_domain;
+
 }
 
 static unsigned
@@ -409,6 +414,7 @@ request_read(struct selector_key *key) {
             return length >= 0 ? DONE : ERROR;
         }
         if(request_is_done( &d->parser, st, 0)) {
+            proxy_data[c->client_fd].request = c->client.request.request.headers;
             strcpy(table[key->fd].host,d->request.host);
             buffer_read_ptr(aux, &auxCount);
             c->bodyWritten = auxCount;
@@ -558,3 +564,4 @@ copy_w(struct selector_key *key) {
 
     return COPY;
 }
+

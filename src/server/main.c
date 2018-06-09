@@ -18,6 +18,7 @@
 #include "netutils.h"
 #include "sctpRequest.h"
 #include "message.h"
+#include "log.h"
 
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -207,15 +208,19 @@ int main(const int argc, const char **argv){
         DieWithUserMessage("ded", "registering sctp socket fd");
     }
 
+    init_file();
+
     while(!done){
         ss = selector_select(selector);
         if(ss != SELECTOR_SUCCESS){
             DieWithUserMessage("ded", "serving");
         }
     }
+
     if(selector != NULL) {
         selector_destroy(selector);
     }
+
     selector_close();
     return 0;
 }

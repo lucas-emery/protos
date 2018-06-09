@@ -16,6 +16,7 @@
 #include "passive.h"
 #include "netutils.h"
 #include "response.h"
+#include "log.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
@@ -116,6 +117,8 @@ typedef struct {
 
 } client_t;
 
+
+
 static unsigned connected(struct selector_key *key);
 
 static void headers_init(const unsigned state, struct selector_key *key);
@@ -210,6 +213,8 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 }
 
 static void origin_done(struct selector_key* key) {
+    gettimeofday(&proxy_data[ORIGIN_ATTACHMENT(key)->client_fd].stop, NULL);
+
     const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
@@ -319,6 +324,7 @@ static unsigned headers_read(struct selector_key *key){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
+            proxy_data[o->client_fd].status_code = o->response.status_code;
             //size_t length = 0;
             //buffer_read_ptr(&o->buff, &length);
             //increase_body_length(&o->parser, -length);
@@ -385,6 +391,8 @@ void request_connect(struct selector_key *key, request_st *d) {
                 error = true;
                 goto finally;
             }
+
+            proxy_data[CLIENT_ATTACHMENT(key)->client_fd].origin_addr = CLIENT_ATTACHMENT(key)->origin_addr;
             o->respDone = s->respDone;
             o->reqDone = s->reqDone;
             o->wb = &s->read_buffer;
@@ -518,3 +526,5 @@ copy_w(struct selector_key *key) {
 
     return COPY;
 }
+
+

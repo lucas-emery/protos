@@ -1,6 +1,12 @@
 #include "response.h"
 
 static enum response_state
+version(const uint8_t c, struct response_parser* p);
+
+static enum response_state
+status_code(const uint8_t c, struct response_parser* p);
+
+static enum response_state
 headers(const uint8_t c, struct response_parser* p);
 
 static enum response_state
@@ -65,7 +71,7 @@ parser_headers(struct response_parser *p, uint8_t * ptr) {
 
 void
 response_parser_init (struct response_parser *p) {
-    p->state = response_headers;
+    p->state = response_version;
     memset(p->response, 0, sizeof(*(p->response)));
     p->response->length = malloc(BUFF_SIZE);
     p->response->mediaType = malloc(BUFF_SIZE);
@@ -73,11 +79,6 @@ response_parser_init (struct response_parser *p) {
     p->response->header_length = 0;
     p->response->body_length = 0;
     p->buffer = malloc(BUFF_SIZE);
-}
-
-void
-response_log() {
-
 }
 
 static void
@@ -105,6 +106,12 @@ response_parser_feed (struct response_parser *p, const uint8_t c) {
     enum response_state next;
 
     switch(p->state) {
+        case response_version:
+            next = version(c, p);
+            break;
+        case response_status_code:
+            next = status_code(c, p);
+            break;
         case response_headers:
             next = headers(c, p);
             break;
@@ -242,6 +249,34 @@ encoding(const uint8_t c, struct response_parser* p) {
         next = response_enter;
     } else if(c != ' ')
         p->buffer[p->i++] = c;
+
+    return next;
+}
+
+
+static enum response_state
+version(const uint8_t c, struct response_parser* p) {
+
+    if(c == ' ')
+        return response_status_code;
+
+    return response_version;
+}
+
+static enum response_state
+status_code(const uint8_t c, struct response_parser* p) {
+    enum response_state next = response_status_code;
+
+    if(c == ' ') {
+        p->buffer[p->i] = 0;
+
+        p->response->status_code = atoi(p->buffer);
+
+        response_reset_buffer(p);
+        next = response_headers;
+    } else {
+        p->buffer[p->i++] = c;
+    }
 
     return next;
 }

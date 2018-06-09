@@ -19,9 +19,12 @@ struct response {
     uint8_t * headers;
     int header_length;
     int body_length;
+    int status_code;
 };
 
 enum response_state{
+    response_version,
+    response_status_code,
     response_headers,
     response_desired_header,
     response_length,
