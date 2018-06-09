@@ -312,9 +312,9 @@ static unsigned headers_read(struct selector_key *key){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
-            size_t length = 0;
-            buffer_read_ptr(&o->buff, &length);
-            increase_body_length(&o->parser, -length);
+            //size_t length = 0;
+            //buffer_read_ptr(&o->buff, &length);
+            //increase_body_length(&o->parser, -length);
             bool transform = false;
             if(transform) {//if transform
                 init_transform(key);
@@ -429,6 +429,7 @@ copy_r(struct selector_key *key) {
     memcpy(ptr, bodyPtr, min);
     buffer_write_adv(b, min);
     buffer_read_adv(&o->buff,min);
+    increase_body_length(&o->parser, -min);
 
     if(min != body) {
         selector_notify_block(key->s, o->origin_fd);
@@ -437,7 +438,7 @@ copy_r(struct selector_key *key) {
     }
 
     ptr = buffer_write_ptr(b, &size);
-    n = recv(key->fd, ptr, size, 0);
+    n = recv(key->fd, ptr, size, 0);  //TODO separar read y block, actualmente entra por block_ready y hace un recv => WOULDBLOCK
     if(n < 0 || (n == 0 && size != 0)) {
         return RESPONSE_ERROR;
     } else {
