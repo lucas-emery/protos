@@ -67,7 +67,7 @@ typedef enum {
      *                          iniciar la conexión al origin server.
      *     - COPY      en otro caso
      */
-    REQUEST_RESOLV,
+    //REQUEST_RESOLV,
 
     /**
      * envía la respuesta del `request' al cliente.
@@ -132,7 +132,7 @@ typedef struct {
         request_st         request;
     } client;
 
-    int bodyWritten;
+    size_t bodyWritten;
     bool * respDone, * reqDone;
     uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
     buffer read_buffer, write_buffer, aux_buffer;
@@ -171,13 +171,13 @@ static const struct state_definition client_statbl[] = {
     {
         .state            = REQUEST_HEADERS,
         .on_arrival       = request_init,
-        .on_departure     = request_read_close,
         .on_read_ready    = request_read,
     },{
-        .state            = REQUEST_RESOLV,
-        .on_block_ready   = request_resolv_done,
-    },{
+//        .state            = REQUEST_RESOLV,
+//        .on_block_ready   = request_resolv_done,
+//    },{
         .state            = COPY,
+        .on_block_ready   = request_resolv_done,
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
     },{
@@ -199,8 +199,8 @@ static char * state_to_string(sock_state_t state){
     switch(state){
         case REQUEST_HEADERS:
             return "REQUEST_HEADERS";
-        case REQUEST_RESOLV:
-            return "REQUEST_RESOLV";
+//        case REQUEST_RESOLV:
+//            return "REQUEST_RESOLV";
         case COPY:
             return "COPY";
         case WAITING:
@@ -382,36 +382,39 @@ static unsigned
 request_read(struct selector_key *key) {
     client_t * c = CLIENT_ATTACHMENT(key);
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-      buffer *b     = d->rb;
+    buffer *b       = d->rb;
+    buffer *aux     = &c->aux_buffer;
     unsigned  ret   = REQUEST_HEADERS;
         bool  error = false;
      uint8_t *ptr, *auxPtr;
-      size_t  count, auxCount;
+      size_t  count, auxCount, min;
      ssize_t  n;
 
     ptr = buffer_write_ptr(b, &count);
-    n = recv(key->fd, ptr, count, 0);
-    auxPtr = buffer_write_ptr(&c->aux_buffer, &auxCount);
+    auxPtr = buffer_write_ptr(aux, &auxCount);
 
-    if(n > auxCount)
-        return ERROR;
+    min = auxCount < count ? auxCount : count;
+
+    n = recv(key->fd, ptr, min, 0);
 
     memcpy(auxPtr, ptr, n);
-
     buffer_write_adv(b,n);
-
-    b = &c->aux_buffer;
+    buffer_write_adv(aux, n);
 
     if(n > 0) {
-        buffer_write_adv(b, n);
-        int st = request_consume(b, &d->parser, &error);
+        request_state_t st = request_consume(aux, &d->parser, &error);
         if(d->parser.request->method == CONNECT) {
+            //TODO send when write ready. Empty wb and fill with err response? Unsub from READ
             ssize_t length = send(key->fd, "HTTP/1.1 405 Method Not Allowed\r\n\r\n", strlen("HTTP/1.1 405 Method Not Allowed\r\n\r\n"), 0);
             return length >= 0 ? DONE : ERROR;
         }
         if(request_is_done( &d->parser, st, 0)) {
-            selector_set_interest_key(key, OP_NOOP);
             strcpy(table[key->fd].host,d->request.host);
+            buffer_read_ptr(aux, &auxCount);
+            c->bodyWritten = auxCount;
+            if(c->bodyWritten == c->client.request.request.content_length) {
+                *c->reqDone = true;
+            }
             ret = request_resolv(key, d);
         }
     } else {
@@ -451,27 +454,21 @@ request_resolv_blocking(void *data) {
 
 static unsigned
 request_resolv(struct selector_key * key, request_st * d) {
-    unsigned ret;
     pthread_t tid;
 
+    //TODO analize error handling. Subbing fro WRITE??
     struct selector_key* k = malloc(sizeof(*key));
     if(k == NULL) {
-        ret       = COPY;
         d->status = status_general_SOCKS_server_failure;
         selector_set_interest_key(key, OP_WRITE);
     } else {
         memcpy(k, key, sizeof(*k));
-        if(-1 == pthread_create(&tid, 0,
-                        request_resolv_blocking, k)) {
-            ret       = COPY;
+        if(-1 == pthread_create(&tid, 0, request_resolv_blocking, k)) {
             d->status = status_general_SOCKS_server_failure;
             selector_set_interest_key(key, OP_WRITE);
-        } else{
-            ret = REQUEST_RESOLV;
-            selector_set_interest_key(key, OP_NOOP);
         }
     }
-    return ret;
+    return COPY;
 }
 
 static unsigned
@@ -491,10 +488,9 @@ request_resolv_done(struct selector_key *key) {
         s->origin_resolution = 0;
     }
 
-
+    //TODO use status to mark connection errors and report to client
 
     request_connect(key, d);
-    selector_set_interest_key(key, OP_NOOP);
     return COPY;
 }
 
@@ -522,16 +518,16 @@ copy_r(struct selector_key *key) {
 
     uint8_t *ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n <= 0) {
+    if(n < 0 || (n == 0 && size != 0)) {
         return ERROR;
     } else {
         buffer_write_adv(b, n);
     }
     selector_add_interest(key->s,c->origin_fd, OP_WRITE);
     c->bodyWritten += n;
-    //if(c->bodyWritten == c->client.request.request.content_length)
-//    printf("holsi\n");
-    *c->reqDone = true;
+    if(c->bodyWritten == c->client.request.request.content_length) {
+        *c->reqDone = true;
+    }
     return COPY;
 }
 

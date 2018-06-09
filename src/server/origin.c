@@ -290,6 +290,7 @@ static unsigned connected(struct selector_key *key){
             return COPY;
         }
     }
+    //TODO Report error to client instead of just closing the connection (aca o en origin_done?)
     return RESPONSE_ERROR;
 }
 
@@ -369,29 +370,25 @@ void request_connect(struct selector_key *key, request_st *d) {
         goto finally;
     }
     if (selector_fd_set_nio(*fd) == -1) {
+        error = true;
         goto finally;
     }
     if (-1 == connect(*fd, (struct sockaddr*) &CLIENT_ATTACHMENT(key)->origin_addr,
                            CLIENT_ATTACHMENT(key)->origin_addr_len)) {
         if(errno == EINPROGRESS) {
-            selector_status st = selector_set_interest_key(key, OP_NOOP);
-            if(SELECTOR_SUCCESS != st) {
-                error = true;
-                goto finally;
-            }
 
-            origin_t * state = origin_new(*fd, key->fd);
+            origin_t * o = origin_new(*fd, key->fd);
 
-            st = selector_register(key->s, *fd, &origin_handler, OP_WRITE, state);         //vos decime cuando puedo escribir en origin_fd (conexion terminada)
+            selector_status st = selector_register(key->s, *fd, &origin_handler, OP_WRITE, o);         //vos decime cuando puedo escribir en origin_fd (conexion terminada)
 
             if(SELECTOR_SUCCESS != st) {
                 error = true;
                 goto finally;
             }
-            state->respDone = s->respDone;
-            state->reqDone = s->reqDone;
-            state->wb = &s->read_buffer;
-            state->rb = &s->write_buffer;
+            o->respDone = s->respDone;
+            o->reqDone = s->reqDone;
+            o->wb = &s->read_buffer;
+            o->rb = &s->write_buffer;
         } else {
             status = errno_to_socks(errno);
             error = true;
@@ -400,7 +397,8 @@ void request_connect(struct selector_key *key, request_st *d) {
     } else {
         // estamos conectados sin esperar... no parece posible
         // saltaríamos directamente a COPY
-        abort();
+        error = true;
+        goto finally;
     }
 
 finally:
@@ -412,7 +410,6 @@ finally:
     }
 
     d->status = status;
-
 }
 
 static void destroy(const unsigned state, struct selector_key *key){
