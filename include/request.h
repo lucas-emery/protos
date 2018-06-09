@@ -20,6 +20,7 @@ typedef enum request_state{
     request_host,
     request_enter,
     request_content_length,
+    request_dest_port,
 
     // apartir de aca están done
     request_done,
@@ -47,6 +48,7 @@ struct request {
     char* headers;
     int headers_length;
     int content_length;
+    uint16_t dest_port;
 };
 
 struct request_parser {

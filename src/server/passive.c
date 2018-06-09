@@ -436,7 +436,10 @@ request_resolv_blocking(void *data) {
         .ai_next      = NULL,
     };
 
-    getaddrinfo(s->client.request.request.host, "http", &hints, &s->origin_resolution);
+    char buff[7];
+    snprintf(buff, sizeof(buff), "%d", s->client.request.request.dest_port);
+
+    getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution);
     selector_notify_block(key->s, key->fd);
 
     free(data);

@@ -19,9 +19,11 @@ enter(const uint8_t c, struct request_parser* p);
 static void
 request_reset_buffer(struct request_parser* p) ;
 
-
 static enum request_state
 content_length(const uint8_t c, struct request_parser* p);
+
+static enum request_state
+dest_port(const uint8_t c, struct request_parser* p);
 
 void
 request_log() {
@@ -95,6 +97,9 @@ request_parser_feed (struct request_parser *p, const uint8_t c) {
         case request_enter:
             next = enter(c, p);
             break;
+        case request_dest_port:
+            next = dest_port(c, p);
+            break;
         case request_done:
         case request_error:
         default:
@@ -164,7 +169,6 @@ enter(const uint8_t c, struct request_parser* p) {
                 return request_desired_header;
             }
             return request_headers;
-        break;
     }
 
     return request_enter;
@@ -214,9 +218,43 @@ host(const uint8_t c, struct request_parser* p) {
 
     if(c == '\r') {
         p->request->host[p->i] = 0;
+        p->request->dest_port = 80;
+
         next = request_enter;
-    } else if(c != ' ')
-        p->request->host[p->i++] = c;
+
+    } else if(c == ':') {
+        p->i = 0;
+        next = request_dest_port;
+
+    } else {
+        if(c != ' ')
+            p->request->host[p->i++] = c;
+    }
+
+
+    return next;
+}
+
+static enum request_state
+dest_port(const uint8_t c, struct request_parser* p) {
+    enum request_state next = request_dest_port;
+
+    if(c == '\r') {
+        char *endptr;
+        errno = 0;
+
+        p->buffer[p->i] = 0;
+
+        p->request->dest_port = (uint16_t) strtol(p->buffer, &endptr, 10);
+
+        if (errno == ERANGE || *endptr != '\0' || p->buffer == endptr)
+            return request_error;
+
+        request_reset_buffer(p);
+        next = request_enter;
+
+    } else
+        p->buffer[p->i++] = c;
 
     return next;
 }
