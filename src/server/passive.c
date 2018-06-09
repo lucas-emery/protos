@@ -252,6 +252,8 @@ static void client_destroy(client_t* s) {
     }
     free(s->reqDone);
     free(s->respDone);
+    free(s->client.request.request.headers);
+    free(s->client.request.request.host);
     free(s);
 }
 

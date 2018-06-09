@@ -228,7 +228,13 @@ static void origin_done(struct selector_key* key) {
 
 
 static void origin_destroy(origin_t* o){
-
+    if(o != NULL) {
+        free(o->response.headers);
+        free(o->response.length);
+        free(o->response.mediaType);
+        free(o->parser.buffer);
+        free(o);
+    }
 }
 
 static void origin_read(struct selector_key *key) {
