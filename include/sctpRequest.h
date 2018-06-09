@@ -4,6 +4,7 @@
 #include "stm.h"
 #include "netutils.h"
 #include "selector.h"
+#include "buffer.h"
 #include <stdio.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // memset
@@ -31,7 +32,7 @@
 
 
 typedef struct {
-    char * read_buffer, * write_buffer;
+    buffer * read_buffer, * write_buffer;
 } sctp_request_st;
 
 typedef struct {
@@ -49,7 +50,8 @@ typedef struct {
     } client;
 
     /** buffers para ser usados read_buffer, write_buffer.*/
-    char * read_buffer, * write_buffer;
+    uint8_t raw_buff_a[MAX_BUFFER_SIZE], raw_buff_b[MAX_BUFFER_SIZE];
+    buffer read_buffer, write_buffer;
 
 } sctp_client_t;
 
@@ -59,6 +61,12 @@ typedef enum {
 	SCTP_DONE,
 	SCTP_ERROR
 } sctp_sock_state_t;
+
+typedef enum {
+    SCTP_PASSWORD,
+    SCTP_METRIC,
+    SCTP_CONFIGURATION
+} sctp_request_state;
 
 int sctp_request_parser(char * read_buffer, char * write_buffer, int n);
 void getMetric(char type, char * metric);

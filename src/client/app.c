@@ -28,6 +28,7 @@ int main(int argc, char const *argv[]) {
 			pass = 1;
 		}
 	}
+	password[passlen] = 0;
 
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
 	 
@@ -40,7 +41,11 @@ int main(int argc, char const *argv[]) {
 	servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	ret = connect(sock, (struct sockaddr *) &servaddr, sizeof (servaddr));
-	sleep(1);
+	//printf("%d\n", ret);
+	//perror("connect()");
+	//if(errno == EINPROGRESS)
+		//printf("Oka\n");
+	//sleep(1);
 	if (ret < 0)
 	  DieWithSystemMessage("connect() failed");
 
@@ -49,7 +54,7 @@ int main(int argc, char const *argv[]) {
 	strcat(buffer, bufferAux);
 	size_t datalen = strlen(buffer);
 	ret = sctp_sendmsg(sock, (void *) buffer, datalen, NULL, 0, 0, 0, 0, 0, 0);
-	printf("datalen: %lu\t%s\n",datalen, buffer);
+	//printf("datalen: %lu\t%s\n",datalen, buffer);
 
 	if(ret < 0 )
 		DieWithSystemMessage("send() failed");
@@ -176,6 +181,7 @@ int getParams(int cantParams, char const *params[], char buffer[]) {
 			return 1;
 		}
 	}
+	buffer[pos] = 0;
 	return 0;
 }
 
@@ -211,7 +217,7 @@ int isMediaType(const char * param) {
 
 void parseResponse(char * buffer, int requests) {
 	int j = 0;
-	printf("%s\n", buffer);
+	//printf("%s\n", buffer);
 	for(int i=0; i<requests; i++) {
 		switch(buffer[j++]) {
 			case '0':

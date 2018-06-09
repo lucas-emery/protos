@@ -10,6 +10,7 @@
 #include <netinet/in.h>
 #include <netinet/sctp.h>
 #include <arpa/inet.h>
+#include <errno.h>
 
 #define MAX_BUFFER 1024
 #define MY_PORT_NUM 9090

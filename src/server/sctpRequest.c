@@ -1,3 +1,4 @@
+#include <sctpRequest.h>
 #include "sctpRequest.h"
 
 #define CLIENT_ATTACHMENT(key) ( (sctp_client_t *)(key)->data)
@@ -8,20 +9,27 @@ static char password[] = "holapete";
 static void sctp_request_init(const unsigned state, struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    d->read_buffer = CLIENT_ATTACHMENT(key)->read_buffer;
-    d->write_buffer = CLIENT_ATTACHMENT(key)->write_buffer;
+    d->read_buffer              = &(CLIENT_ATTACHMENT(key)->read_buffer);
+    d->write_buffer              = &(CLIENT_ATTACHMENT(key)->write_buffer);
 }
 
 static unsigned sctp_request_read(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-
+    buffer * read_buffer = d->read_buffer;
+    buffer * write_buffer = d->write_buffer;
+    uint8_t * ptr;
+    size_t count;
+    ssize_t n;
     struct sctp_sndrcvinfo sndrcvinfo;
-    int flags, n;
+    int flags;
 
-    bzero(d->read_buffer, MAX_BUFFER_SIZE);
-    n = sctp_recvmsg(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
+    ptr = buffer_write_ptr(read_buffer, &count);
+
+    n = sctp_recvmsg(key->fd, ptr, count, (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
+    perror("sctp_recvmsg()");
+    buffer_write_adv(read_buffer,n);
     if(n > 0) {
-    	if(sctp_request_parser(d->read_buffer, d->write_buffer, n) > 0) {
+    	if(sctp_request_parser(read_buffer, write_buffer, n) > 0) {
         	selector_set_interest_key(key, OP_WRITE);
         	return SCTP_WRITE;
         }
@@ -30,8 +38,6 @@ static unsigned sctp_request_read(struct selector_key *key) {
     }
     else
     {
-        printf("%d\n", n);
-    	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
     }
 }
@@ -42,8 +48,15 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
+    buffer * write_buffer = d->write_buffer;
+    uint8_t * ptr;
+    size_t count;
+    ssize_t n;
 
-    int n = sctp_sendmsg(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, 0, 0, 0, 0, 0);
+    ptr = buffer_read_ptr(write_buffer, &count);
+
+    n = sctp_sendmsg(key->fd, ptr, count, (struct sockaddr *) NULL, 0, 0, 0, 0, 0, 0);
+    perror("sctp_sendmsg()");
     if(n == -1) {
         return SCTP_ERROR;
     }
@@ -91,8 +104,8 @@ static sctp_client_t * sctp_client_new(int client_fd) {
     ret->stm    .states    = sctp_client_describe_states();
     stm_init(&ret->stm);
 
-    ret->read_buffer = malloc(MAX_BUFFER_SIZE);
-    ret->write_buffer = malloc(MAX_BUFFER_SIZE);
+    buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
+    buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
 
 finally:
     return ret;
@@ -188,10 +201,80 @@ fail:
     sctp_client_destroy(state);
 }
 
-int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
-	int i, read_pos = 0, write_pos = 0;
+int sctp_request_parser(buffer * read_buffer, buffer * write_buffer, int n) {
+	int i, password_pos = 0, metric_pos = 0, configuration_pos = 0;
 	char metric[METRIC_SIZE], type, mediaType[MEDIATYPE_SIZE];
-	
+	sctp_request_state state = SCTP_PASSWORD;
+
+
+    while(buffer_can_read(read_buffer)) {
+        const uint8_t c = buffer_read(read_buffer);
+        switch(state) {
+            case SCTP_PASSWORD:
+                if(password_pos < PASSWORD_SIZE) {
+                    if (password[password_pos++] != c) {
+                        return 0;
+                    }
+                } else {
+                    state = SCTP_METRIC;
+                }
+                break;
+            case SCTP_METRIC:
+                if (metric_pos == 0) {
+                    if (c == METRIC) {
+                        metric_pos++;
+                    } else {
+                        state = SCTP_CONFIGURATION;
+                    }
+                } else {
+                    metric_pos = 0;
+                    type = c;
+                    bzero(metric, sizeof(metric));
+                    getMetric(type, metric);
+                    if(metric != 0) {
+                        buffer_write(write_buffer, METRIC);
+                        buffer_write(write_buffer, type);
+                        for(int i=0; i<METRIC_SIZE; i++) {
+                            buffer_write(write_buffer, metric[i]);
+                        }
+                    } else {
+                        buffer_write(write_buffer, METRIC_ERROR);
+                        buffer_write(write_buffer, type);
+                    }
+                }
+                break;
+            case SCTP_CONFIGURATION:
+
+                if(configuration_pos == 0) {
+                    bzero(mediaType, MEDIATYPE_SIZE);
+                    configuration_pos++;
+                } else if (configuration_pos == 1) {
+                    type = c;
+                    configuration_pos++;
+                } else {
+                    if(c == ' ') {
+                        if(applyFilter(type, mediaType)) {
+                            buffer_write(write_buffer, CONFIGURATION);
+                            buffer_write(write_buffer, type);
+                        } else {
+                            buffer_write(write_buffer, CONFIGURATION_ERROR);
+                            buffer_write(write_buffer, type);
+                        }
+                        configuration_pos = 0;
+                        state = SCTP_METRIC;
+                    } else {
+
+                        mediaType[configuration_pos-2] = c;
+                        configuration_pos++;
+                    }
+                }
+                break;
+        }
+    }
+
+
+
+    /*
 	for(i=0; i<PASSWORD_SIZE; i++) {
 		if(password[i] != read_buffer[read_pos++]) {
 			return 0;
@@ -238,6 +321,7 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 			break;
 		}
 	}
+    */
 
 	return 1;
 }
