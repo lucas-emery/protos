@@ -540,9 +540,13 @@ copy_w(struct selector_key *key) {
     buffer* b = &c->write_buffer;
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
-    if(size == 0){
-        selector_remove_interest(key->s, key->fd, OP_WRITE);
-        return COPY;
+    if(size == 0) {
+        //selector_remove_interest(key->s, key->fd, OP_WRITE);
+        if(*c->respDone && *c->reqDone) {
+            return DONE;
+        } else {
+            return COPY;
+        }
     }
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
     if(n == -1) {
@@ -551,9 +555,6 @@ copy_w(struct selector_key *key) {
     } else {
         buffer_read_adv(b, n);
     }
-
-    if(*c->respDone && *c->reqDone)
-        return DONE;
 
     return COPY;
 }

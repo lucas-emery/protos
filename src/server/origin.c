@@ -122,6 +122,8 @@ static void headers_init(const unsigned state, struct selector_key *key);
 
 static void headers_flush(const unsigned state, struct selector_key *key);
 
+static unsigned flush_body(struct selector_key *key);
+
 static unsigned headers_read(struct selector_key *key);
 
 static unsigned transform(struct selector_key *key);
@@ -163,6 +165,7 @@ static const struct state_definition origin_statbl[] = {
     },{
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
+        .on_block_ready   = copy_r,
         .state            = COPY,
     },{
         .state            = RESPONSE_DONE,
@@ -336,7 +339,10 @@ static void headers_flush(const unsigned state, struct selector_key *key){
         }
     }
     buffer_write_adv(b, o->response.header_length);
+
     selector_set_interest(key->s, o->client_fd, OP_WRITE);
+    selector_remove_interest(key->s, o->origin_fd, OP_READ);
+    selector_notify_block(key->s, o->origin_fd);
 }
 
 static unsigned transform(struct selector_key *key){
@@ -418,15 +424,21 @@ copy_r(struct selector_key *key) {
     uint8_t * ptr = buffer_write_ptr(b, &size);
     uint8_t * bodyPtr = buffer_read_ptr(&o->buff, &body);
 
-    min = size < body?size:body;
+    min = size < body? size : body;
 
     memcpy(ptr, bodyPtr, min);
     buffer_write_adv(b, min);
     buffer_read_adv(&o->buff,min);
 
+    if(min != body) {
+        selector_notify_block(key->s, o->origin_fd);
+    } else {
+        selector_add_interest(key->s, o->origin_fd, OP_READ);
+    }
+
     ptr = buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n < 0) {
+    if(n < 0 || (n == 0 && size != 0)) {
         return RESPONSE_ERROR;
     } else {
         buffer_write_adv(b, n);
