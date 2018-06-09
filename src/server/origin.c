@@ -165,7 +165,7 @@ static const struct state_definition origin_statbl[] = {
     },{
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
-        .on_block_ready   = copy_r,
+        .on_block_ready   = flush_body,
         .state            = COPY,
     },{
         .state            = RESPONSE_DONE,
@@ -415,11 +415,10 @@ static void destroy(const unsigned state, struct selector_key *key){
 }
 
 static unsigned
-copy_r(struct selector_key *key) {
+flush_body(struct selector_key *key) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
-    buffer * b = o->tb == NULL?o->rb:o->tb;
-    ssize_t n, min;
-    size_t size, body;
+    buffer * b = o->tb == NULL? o->rb : o->tb;
+    size_t size, body, min;
 
     uint8_t * ptr = buffer_write_ptr(b, &size);
     uint8_t * bodyPtr = buffer_read_ptr(&o->buff, &body);
@@ -428,8 +427,7 @@ copy_r(struct selector_key *key) {
 
     memcpy(ptr, bodyPtr, min);
     buffer_write_adv(b, min);
-    buffer_read_adv(&o->buff,min);
-    increase_body_length(&o->parser, -min);
+    buffer_read_adv(&o->buff, min);
 
     if(min != body) {
         selector_notify_block(key->s, o->origin_fd);
@@ -437,8 +435,32 @@ copy_r(struct selector_key *key) {
         selector_add_interest(key->s, o->origin_fd, OP_READ);
     }
 
-    ptr = buffer_write_ptr(b, &size);
-    n = recv(key->fd, ptr, size, 0);  //TODO separar read y block, actualmente entra por block_ready y hace un recv => WOULDBLOCK
+    if(o->infd == -1 || o->outfd == -1) {
+        selector_remove_interest(key->s, o->infd, OP_WRITE);
+        selector_add_interest(key->s, o->client_fd, OP_WRITE);
+    }else{
+        selector_remove_interest(key->s,o->client_fd, OP_WRITE);
+        selector_add_interest(key->s, o->infd, OP_WRITE);
+    }
+
+    if(o->response.chunked){
+        *o->respDone = chunked_is_done(ptr, min);
+    } else {
+        *o->respDone = body_is_done(&o->parser, min); //TODO check length status
+    }
+
+    return COPY;
+}
+
+static unsigned
+copy_r(struct selector_key *key) {
+    origin_t * o = ORIGIN_ATTACHMENT(key);
+    buffer * b = o->tb == NULL? o->rb : o->tb;
+    ssize_t n;
+    size_t size;
+
+    uint8_t * ptr= buffer_write_ptr(b, &size);
+    n = recv(key->fd, ptr, size, 0);
     if(n < 0 || (n == 0 && size != 0)) {
         return RESPONSE_ERROR;
     } else {
