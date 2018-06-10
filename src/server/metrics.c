@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include "metrics.h"
+#include <string.h>
 
 #define KB 1024
 #define US2MS 1000

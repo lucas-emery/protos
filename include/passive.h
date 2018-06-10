@@ -56,7 +56,7 @@ typedef struct {
     struct timeval time;
 
     ssize_t bodyWritten;
-    bool * respDone, * reqDone;
+    bool * respDone, * reqDone, * transDone;
     uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
     buffer read_buffer, write_buffer, aux_buffer;
 

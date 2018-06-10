@@ -9,10 +9,11 @@
 
 #include <arpa/inet.h>
 #include <metrics.h>
+#include <transformation.h>
+#include <passive.h>
 
 #include "request.h"
 #include "buffer.h"
-
 #include "stm.h"
 #include "passive.h"
 #include "netutils.h"
@@ -61,7 +62,7 @@ typedef struct {
     bool readFirst;
 
     buffer *rb , *wb, *tb;
-    bool * respDone, *reqDone;
+    bool * respDone, *reqDone, *transDone;
     uint8_t  raw_data[BUFF_SIZE];
 
     struct timeval time;
@@ -244,9 +245,6 @@ static unsigned connected(struct selector_key *key){
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
             logTime(CONN, &ORIGIN_ATTACHMENT(key)->time);
-//            origin_t * o = (origin_t*) key->data;
-            //selector_notify_block(key->s,o->client_fd);
-            //selector_set_interest_key(key, OP_READ);
             return COPY;
         }
     }
@@ -280,12 +278,13 @@ static unsigned headers_read(struct selector_key *key){
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
-            bool transform = false;
-            if(transform) {//if transform
+            bool transform = isActive(o->response.mediaType);
+            if(transform) {
                 init_transform(key);
                 selector_remove_interest(key->s, key->fd, OP_WRITE);
                 return COPY;
             }
+            o->transDone = true;
             return COPY;
         }
     }
@@ -354,6 +353,7 @@ void request_connect(struct selector_key *key, request_st *d) {
             register_origin_addr(CLIENT_ATTACHMENT(key)->client_fd, &CLIENT_ATTACHMENT(key)->origin_addr);
             o->respDone = s->respDone;
             o->reqDone = s->reqDone;
+            o->transDone = s->transDone;
             o->wb = &s->read_buffer;
             o->rb = &s->write_buffer;
         } else {
@@ -431,7 +431,7 @@ copy_r(struct selector_key *key) {
 
     uint8_t * ptr= buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n < 0 || (n == 0 && size != 0)) {
+    if(n < 0 || ((n == 0 && size != 0)) && *o->transDone) {
         return RESPONSE_ERROR;
     } else {
         log(TRAFFIC, n);
@@ -443,6 +443,7 @@ copy_r(struct selector_key *key) {
     }else{
         selector_remove_interest(key->s,o->client_fd,OP_WRITE);
         selector_add_interest(key->s, o->infd, OP_WRITE);
+        selector_add_interest(key->s, o->outfd, OP_READ);
     }
 
     bool done = false;

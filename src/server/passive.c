@@ -9,6 +9,7 @@
 
 #include <arpa/inet.h>
 #include <http.h>
+#include <passive.h>
 
 #include "request.h"
 #include "buffer.h"
@@ -174,8 +175,10 @@ static client_t * client_new(int client_fd) {
 
     ret->reqDone = malloc(sizeof(bool));
     ret->respDone = malloc(sizeof(bool));
+    ret->transDone = malloc(sizeof(bool));
     *ret->reqDone = false;
     *ret->respDone = false;
+    *ret->transDone = false;
     buffer_init(&ret->read_buffer,  N(ret->raw_buff_a), ret->raw_buff_a);
     buffer_init(&ret->write_buffer, N(ret->raw_buff_b), ret->raw_buff_b);
     buffer_init(&ret->aux_buffer, N(ret->raw_buff_aux), ret->raw_buff_aux);
@@ -501,7 +504,7 @@ copy_w(struct selector_key *key) {
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0) {
         selector_remove_interest(key->s, key->fd, OP_WRITE);
-        if(*c->respDone && *c->reqDone) {
+        if(*c->respDone && *c->reqDone && *c->transDone ) {
             logTime(RESPONSE, &c->time);
             return DONE;
         } else {

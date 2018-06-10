@@ -5,9 +5,28 @@
 #include <selector.h>
 #include <response.h>
 #include <metrics.h>
+#include <transformation.h>
 
-transformation_t transformations;
-int transformationCount;
+
+#define BLOCK 5
+#define EXE_COUNT 2
+transformation_t ** transformations;
+int transformationCount, size;
+
+typedef struct {
+    transformation_type_t type;
+    char * exec;
+} exe_t;
+
+static exe_t exe_array[] = {
+        {
+            .type   = TOUPPER,
+            .exec   = TOUPPER_EXE,
+        },{
+            .type   = ECHO,
+            .exec   = ECHO_EXE,
+        }
+};
 
 enum type{
     NONE,
@@ -25,7 +44,7 @@ typedef struct {
     bool readFirst;
 
     buffer *rb , *wb, *tb;
-    bool * respDone, *reqDone;
+    bool * respDone, *reqDone, *transDone;
     uint8_t  raw_data[BUFF_SIZE];
 
     struct timeval time;
@@ -54,6 +73,8 @@ typedef struct {
     buffer *b, *aux;
     struct state_machine stm;
     int client_fd;
+
+    bool * transDone;
 
     struct timeval time;
     bool timing;
@@ -94,7 +115,7 @@ static const struct state_definition * transform_describe_states(void){
 }
 
 
-transform_t * transform_new(int client_fd, bool write){
+transform_t * transform_new(int client_fd){
     transform_t * ret = malloc(sizeof(transform_t));
 
     if(ret == NULL)
@@ -169,6 +190,8 @@ copy_r(struct selector_key *key) {
 
     ptr = buffer_write_ptr(b, &size);
     n = read(key->fd, ptr, size);
+    if(n == 0)
+        *t->transDone = true;
     if(n < 0) {
         return ERROR;
     } else {
@@ -207,72 +230,75 @@ copy_w(struct selector_key *key) {
     return COPY;
 }
 
-int equals(transformation_t transformation1, transformation_t transformation2);
+int equals(transformation_t * transformation1, transformation_t * transformation2);
 
-void activateTransformation(char* mediaType, transformation_type_t type) {
-    int finished = FALSE;
-    transformation new;
-    new.mediaType = mediaType;
-    new.type = type;
-    new.activated = TRUE;
+void registerTransformation(const char* mediaType, transformation_type_t type) {
+    int index = getTransformation(mediaType);
+    if(index < 0){
+        transformation_t * new = malloc(sizeof(transformation_t));
+        new->mediaType = strdup(mediaType);
+        new->type = type;
 
-    for (size_t i = 0; i < transformationCount && !finished; i++) {
-
-        if( equals(&new, transformations + i) ) {
-            transformations[i].activated = TRUE;
-            finished = TRUE;
+        if(transformationCount == size){
+            transformations = realloc(transformations, (BLOCK + transformationCount) * sizeof(transformation_t) );
+            size += BLOCK;
         }
-    }
 
-    if(!finished) {
-        transformationCount++;
-        transformations = realloc(transformations, transformationCount * sizeof(transformation));
-        transformations[transformationCount - 1] = new;
+        transformations[transformationCount++] = new;
+    } else {
+        transformations[index]->type = type;
     }
 }
 
-int deactivateTransformation(char* mediaType, transformation_type_t type) {
-    int finished = FALSE;
-    transformation new;
-    new.mediaType = mediaType;
-    new.type = type;
-
-    for (size_t i = 0; i < transformationCount && !finished; i++) {
-
-        if( equals(&new, transformations + i) ) {
-            transformations[i].activated = FALSE;
-            finished = TRUE;
-        }
+void unregisterTransformation(const char* mediaType) {
+    int index = getTransformation(mediaType);
+    if(index < 0){
+        return;
     }
 
-    if(!finished) {
-        return -1;
+    free(transformations[index]->mediaType);
+    free(transformations[index]);
+
+    for (int i = index; i < transformationCount - 1; ++i) {
+        transformations[i] = transformations[i+1];
     }
 
-    return 0;
+    transformations[transformationCount--] = NULL;
 }
 
-void execute(char* mediaType, char* body) {
-
-    for (size_t i = 0; i < transformationCount; i++) {
-
-        transformation t = transformations[i];
-
-        if( strcmp(t.mediaType, mediaType) == 0 && t.activated) {
-            //run
+int getTransformation(const char* mediaType){
+    for (int i = 0; i < transformationCount; ++i) {
+        if(strcmp(transformations[i]->mediaType, mediaType) == 0){
+            return i;
         }
     }
+    return -1;
 }
 
-transformation_t listAll(int* count) {
+const char * getExe(const char* mediaType){
+    int index = getTransformation(mediaType);
+
+    if(index < 0)
+        return NULL;
+
+    transformation_type_t type = transformations[index]->type;
+
+    for (int i = 0; i < EXE_COUNT; ++i) {
+        if(type == exe_array[i].type)
+            return exe_array[i].exec;
+    }
+
+    return NULL;
+
+}
+
+bool isActive(const char * mediaType){
+    return getTransformation(mediaType) != -1;
+}
+
+transformation_t * listAll(int* count) {
     *count = transformationCount;
     return transformations;
-}
-
-int equals(transformation_t transformation1, transformation_t transformation2) {
-    int mediaType = strcmp(transformation1->mediaType, transformation2->mediaType) == 0;
-    int type = transformation1->type == transformation2->type;
-    return mediaType && type;
 }
 
 
@@ -291,7 +317,6 @@ unsigned init_transform(struct selector_key *key){
     if(pipe(in) == -1 || pipe(out) == -1) {
         return ERROR;
     }
-    printf("Forking\n");
     const pid_t cmdpid = fork();
     if (cmdpid == -1) {
         return ERROR;
@@ -304,7 +329,7 @@ unsigned init_transform(struct selector_key *key){
         dup2(in [R], STDIN_FILENO);
         dup2(out[W], STDOUT_FILENO);
 
-        if(-1 == execv("bin/toUpper", (char **) 0)) {
+        if(-1 == execv(getExe(o->response.mediaType), (char **) 0)) {
             close(in [R]);
             close(out[W]);
             ret = 1;
@@ -320,9 +345,8 @@ unsigned init_transform(struct selector_key *key){
         fds[3] = out[R];
     }
 
-    transform_t * tIn = transform_new(o->client_fd, false);
-    transform_t * tOut = transform_new(o->client_fd, true);
-
+    transform_t * tIn = transform_new(o->client_fd);
+    transform_t * tOut = transform_new(o->client_fd);
 
     if(tIn == NULL || tOut == NULL)
         return ERROR;
@@ -339,8 +363,10 @@ unsigned init_transform(struct selector_key *key){
     o->infd = fds[2];
     o->outfd = fds[3];
 
+    tIn->transDone = o->transDone;
+    tOut->transDone = o->transDone;
+
     selector_register(key->s, o->infd, &transform_handler, OP_NOOP, tIn);
     selector_register(key->s, o->outfd, &transform_handler, OP_READ, tOut);
     return ret;
-} //b8:o->rb
-    //98:0>wb
+}
