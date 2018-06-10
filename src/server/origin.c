@@ -396,7 +396,7 @@ void request_connect(struct selector_key *key, request_st *d) {
                 goto finally;
             }
 
-            register_origin_addr(CLIENT_ATTACHMENT(key)->client_fd, CLIENT_ATTACHMENT(key)->origin_addr);
+            register_origin_addr(CLIENT_ATTACHMENT(key)->client_fd, &CLIENT_ATTACHMENT(key)->origin_addr);
             o->respDone = s->respDone;
             o->reqDone = s->reqDone;
             o->wb = &s->read_buffer;

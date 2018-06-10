@@ -208,7 +208,7 @@ int main(const int argc, const char **argv){
         DieWithUserMessage("ded", "registering sctp socket fd");
     }
 
-    init_file();
+    init_log();
 
     while(!done){
         ss = selector_select(selector);

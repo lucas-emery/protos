@@ -10,16 +10,16 @@ void
 log_request(int client_fd);
 
 void
-init_file();
+init_log();
 
 void
 register_request(int client_fd, char* request);
 
 void
-register_origin_addr(int client_fd, struct sockaddr_storage origin_addr);
+register_origin_addr(int client_fd, struct sockaddr_storage* origin_addr);
 
 void
-register_client_addr(int client_fd, struct sockaddr_storage client_addr);
+register_client_addr(int client_fd, struct sockaddr_storage* client_addr);
 
 void
 register_status_code(int client_fd, int status_code);

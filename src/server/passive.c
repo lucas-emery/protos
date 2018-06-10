@@ -295,7 +295,7 @@ void socks_passive_accept(struct selector_key *key){
     memcpy(&state->client_addr, &client_addr, client_addr_len);
     state->client_addr_len = client_addr_len;
 
-    register_client_addr(state->client_fd, state->client_addr);
+    register_client_addr(state->client_fd, &state->client_addr);
     register_start(state->client_fd);
 
     if(selector_register(key->s, client, &client_handler, OP_READ, state) != SELECTOR_SUCCESS){
@@ -408,22 +408,23 @@ request_read(struct selector_key *key) {
 
     if(n > 0) {
         request_state_t st = request_consume(aux, &d->parser, &error);
-        register_request(c->client_fd, d->request.headers);
-        if(d->parser.request->method == CONNECT) {
-            //TODO send when write ready. Empty wb and fill with err response? Unsub from READ
-            char* error_message = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
-            register_status_code(c->client_fd, 405);
-            ssize_t length = send(key->fd, error_message, strlen(error_message), 0);
-            return length >= 0 ? DONE : ERROR;
-        }
         if(request_is_done( &d->parser, st, 0)) {
-            strcpy(table[key->fd].host,d->request.host);
-            buffer_read_ptr(aux, &auxCount);
-            c->bodyWritten = auxCount;
-            if(c->bodyWritten == c->client.request.request.content_length) {
-                *c->reqDone = true;
+            register_request(c->client_fd, d->request.headers);
+            if(d->parser.request->method == CONNECT) {
+                //TODO send when write ready. Empty wb and fill with err response? Unsub from READ
+                char* error_message = "HTTP/1.1 405 Method Not Allowed\r\n\r\n";
+                register_status_code(c->client_fd, 405);
+                ssize_t length = send(key->fd, error_message, strlen(error_message), 0);
+                return length >= 0 ? DONE : ERROR;
+            } else {
+                strcpy(table[key->fd].host, d->request.host);
+                buffer_read_ptr(aux, &auxCount);
+                c->bodyWritten = auxCount;
+                if (c->bodyWritten == c->client.request.request.content_length) {
+                    *c->reqDone = true;
+                }
+                ret = request_resolv(key, d);
             }
-            ret = request_resolv(key, d);
         }
     } else {
         ret = ERROR;
