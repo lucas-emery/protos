@@ -49,7 +49,7 @@ void
 log_request(int client_fd) {
     struct request_data data = proxy_data[client_fd];
 
-    long int duration = data.start.tv_usec - data.stop.tv_usec;
+    long int duration = llabs(data.start.tv_usec - data.stop.tv_usec);
     char request_header[1000];
     int i, status_code = data.status_code;
 

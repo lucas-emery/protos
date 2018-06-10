@@ -26,11 +26,6 @@ static enum request_state
 dest_port(const uint8_t c, struct request_parser* p);
 
 void
-request_log() {
-
-}
-
-void
 request_parser_init (struct request_parser *p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
@@ -65,7 +60,7 @@ request_is_done(struct request_parser *p, const enum request_state st, bool *err
 }
 
 void
-request_clean(struct request_parser *p) {
+request_close(struct request_parser *p) {
     free(p->buffer);
 }
 

@@ -235,9 +235,7 @@ static void origin_done(struct selector_key* key) {
 static void origin_destroy(origin_t* o){
     if(o != NULL) {
         free(o->response.headers);
-        free(o->response.length);
         free(o->response.mediaType);
-        free(o->parser.buffer);
         free(o);
     }
 }
@@ -344,8 +342,8 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
     buffer* b    = o->rb;
     size_t size;
-
     uint8_t *ptr = buffer_write_ptr(b, &size);
+
     if(size > o->response.header_length){
         for (size_t i = 0; i < o->response.header_length; i++) {
             ptr[i] = o->response.headers[i];
@@ -356,6 +354,8 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     selector_set_interest(key->s, o->client_fd, OP_WRITE);
     selector_remove_interest(key->s, o->origin_fd, OP_READ);
     selector_notify_block(key->s, o->origin_fd);
+
+    response_close(&o->parser);
 }
 
 static unsigned transform(struct selector_key *key){

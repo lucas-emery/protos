@@ -55,8 +55,6 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
        p->response->header_length++;
        st = response_parser_feed(p, c);
        if(response_is_done(st, errored)) {
-         if(!p->response->chunked)
-             p->response->body_length = atoi(p->response->length);
           break;
        }
     }
@@ -73,7 +71,6 @@ void
 response_parser_init (struct response_parser *p) {
     p->state = response_version;
     memset(p->response, 0, sizeof(*(p->response)));
-    p->response->length = malloc(BUFF_SIZE);
     p->response->mediaType = malloc(BUFF_SIZE);
     p->response->chunked = FALSE;
     p->response->header_length = 0;
@@ -209,12 +206,15 @@ length(const uint8_t c, struct response_parser* p) {
     enum response_state next = response_length;
 
     if(c == '\r') {
-        p->response->length[p->i] = 0;
+        p->buffer[p->i] = 0;
+
+        p->response->body_length = atoi(p->buffer);
+
         response_reset_buffer(p);
         p->buffer[p->i++] = c;
         next = response_enter;
     } else if(c != ' ')
-        p->response->length[p->i++] = c;
+        p->buffer[p->i++] = c;
 
     return next;
 }

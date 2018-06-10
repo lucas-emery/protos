@@ -507,7 +507,7 @@ request_read_done(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t *c      =  CLIENT_ATTACHMENT(key);
     *c->reqDone = true;
-    request_clean(&d->parser);
+    request_close(&d->parser);
 }
 
 static unsigned

@@ -118,4 +118,4 @@ enum socks_response_status
 errno_to_socks(int e);
 
 void
-request_clean(struct request_parser *p);
+request_close(struct request_parser *p);
