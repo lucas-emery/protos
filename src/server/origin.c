@@ -117,7 +117,7 @@ typedef struct {
 
 } client_t;
 
-
+static void clear_interests(const unsigned state, struct selector_key *key);
 
 static unsigned connected(struct selector_key *key);
 
@@ -172,9 +172,10 @@ static const struct state_definition origin_statbl[] = {
         .state            = COPY,
     },{
         .state            = RESPONSE_DONE,
-        .on_arrival       = destroy,
+        .on_arrival       = clear_interests,
     },{
         .state            = RESPONSE_ERROR,
+        .on_arrival       = clear_interests,
     }
 };
 
@@ -214,8 +215,7 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 
 static void origin_done(struct selector_key* key) {
     register_stop(ORIGIN_ATTACHMENT(key)->client_fd);
-
-    const int fds[] = {
+    /*const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
     };
@@ -228,7 +228,7 @@ static void origin_done(struct selector_key* key) {
             strcpy(table[key->fd].state, "");
             close(fds[i]);
         }
-    }
+    }*/
 }
 
 
@@ -280,6 +280,10 @@ static const struct fd_handler origin_handler = {
     .handle_close  = origin_close,
     .handle_block  = origin_block,
 };
+
+static void clear_interests(const unsigned state, struct selector_key *key) {
+    selector_set_interest_key(key, OP_NOOP);
+}
 
 static unsigned connected(struct selector_key *key){
     int error = 0;
