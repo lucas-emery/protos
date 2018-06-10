@@ -18,6 +18,7 @@
 #include "netutils.h"
 #include "response.h"
 #include "log.h"
+#include "chunked_transformation.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 #define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
@@ -157,6 +158,9 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
     ret->infd = -1;
     ret->outfd = -1;
 
+    ret->response.chunks = malloc(sizeof(struct chunk*));
+    ret->response.chunk_count = 0;
+
     ret->stm.initial = CONNECTING;
     ret->stm.max_state = RESPONSE_ERROR;
     ret->stm.states = origin_describe_states();
@@ -167,6 +171,12 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 
 static void origin_done(struct selector_key* key) {
     register_stop(ORIGIN_ATTACHMENT(key)->client_fd);
+    FILE* chunk = fopen("chunk.txt", "a");
+    origin_t * o = (origin_t*) key->data;
+    for (int i = 0; i < o->response.chunk_count; ++i) {
+        fprintf(chunk, "%s", o->response.chunks[i]->body);
+    }
+    fclose(chunk);
     /*const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
         ORIGIN_ATTACHMENT(key)->origin_fd,
@@ -250,7 +260,7 @@ static unsigned connected(struct selector_key *key){
             return COPY;
         }
     }
-    //TODO Report error to client instead of just closing the connection (aca o en origin_done?)
+    //TODO Report transformation_error to client instead of just closing the connection (aca o en origin_done?)
     return RESPONSE_ERROR;
 }
 
@@ -414,9 +424,10 @@ flush_body(struct selector_key *key) {
     }
 
     if(o->response.chunked){
+        o->response.chunk_count = parse_chunks(ptr, min, &o->response.chunks, o->response.chunk_count);
         *o->respDone = chunked_is_done(ptr, min);
     } else {
-        *o->respDone = body_is_done(&o->parser, min); //TODO check length status
+        *o->respDone = body_is_done(&o->parser, min); //TODO check transformation_length status
     }
 
     return COPY;
@@ -437,6 +448,8 @@ copy_r(struct selector_key *key) {
         log(TRAFFIC, n);
         buffer_write_adv(b, n);
     }
+
+
     if(o->infd == -1 || o->outfd == -1) {
         selector_remove_interest(key->s, o->infd, OP_WRITE);
         selector_add_interest(key->s, o->client_fd, OP_WRITE);
@@ -448,6 +461,7 @@ copy_r(struct selector_key *key) {
     bool done = false;
 
     if(o->response.chunked){
+        o->response.chunk_count = parse_chunks(ptr, n, &o->response.chunks, o->response.chunk_count);
         done = chunked_is_done(ptr, n);
     } else {
         done = body_is_done(&o->parser, n);

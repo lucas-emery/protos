@@ -39,7 +39,7 @@ selector_error(const selector_status status) {
             msg = "Illegal argument";
             break;
         case SELECTOR_IO:
-            msg = "I/O error";
+            msg = "I/O transformation_error";
             break;
         default:
             msg = ERROR_DEFAULT_MSG;

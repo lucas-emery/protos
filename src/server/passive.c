@@ -18,6 +18,7 @@
 #include "netutils.h"
 #include "response.h"
 #include "metrics.h"
+#include "chunked_transformation.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 

@@ -22,6 +22,8 @@ struct response {
     int header_length;
     int body_length;
     int status_code;
+    struct chunk** chunks;
+    int chunk_count;
 };
 
 enum response_state{
@@ -34,10 +36,10 @@ enum response_state{
     response_encoding,
     response_enter,
 
-    // apartir de aca están done
+    // apartir de aca están transformation_done
     response_done,
 
-    // y apartir de aca son considerado con error
+    // y apartir de aca son considerado con transformation_error
     response_error
 };
 

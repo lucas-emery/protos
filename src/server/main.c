@@ -30,7 +30,7 @@
 
 //#define DEBUG
 
-static bool done = false;
+static bool transformation_done = false;
 
 enum type{
     NONE,
@@ -72,7 +72,7 @@ void * print_table(){
 
 static void sigterm_handler(const int signal){
     printf("Signal %d, graceful exit\n", signal);
-    done = true;
+    transformation_done = true;
 }
 
 //void
@@ -210,7 +210,7 @@ int main(const int argc, const char **argv){
 
     init_log();
 
-    while(!done){
+    while(!transformation_done){
         ss = selector_select(selector);
         if(ss != SELECTOR_SUCCESS){
             DieWithUserMessage("ded", "serving");

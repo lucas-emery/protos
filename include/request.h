@@ -25,10 +25,10 @@ typedef enum request_state{
     request_content_length,
     request_dest_port,
 
-    // apartir de aca están done
+    // apartir de aca están transformation_done
     request_done,
 
-    // y apartir de aca son considerado con error
+    // y apartir de aca son considerado con transformation_error
     request_error
 } request_state_t;
 
