@@ -1,3 +1,6 @@
+#ifndef PC_2018_07_REQUEST_H
+#define PC_2018_07_REQUEST_H
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -119,3 +122,5 @@ errno_to_socks(int e);
 
 void
 request_close(struct request_parser *p);
+
+#endif

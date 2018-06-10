@@ -1,4 +1,3 @@
-
 #ifndef PC_2018_07_LOG_H
 #define PC_2018_07_LOG_H
 

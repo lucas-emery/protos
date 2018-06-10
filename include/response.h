@@ -1,3 +1,6 @@
+#ifndef PC_2018_07_RESPONSE_H
+#define PC_2018_07_RESPONSE_H
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -94,3 +97,5 @@ parser_headers(struct response_parser *p, uint8_t * ptr);
 
 bool
 chunked_is_done(uint8_t * buffer, int length);
+
+#endif

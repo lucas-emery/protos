@@ -1,3 +1,6 @@
+#ifndef PC_2018_07_TRANSFORMATION_H
+#define PC_2018_07_TRANSFORMATION_H
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -19,3 +22,5 @@ transformation_t listAll(int* count);
 void activateTransformation(char* mediaType, transformation_type_t type);
 int deactivateTransformation(char* mediaType, transformation_type_t type);
 void execute(char* mediaType, char* body);
+
+#endif

@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #include <arpa/inet.h>
+#include <http.h>
 
 #include "request.h"
 #include "buffer.h"
@@ -90,61 +91,7 @@ typedef enum {
     ERROR,
 } sock_state_t;
 
-typedef struct {
-    /** buffer utilizado para I/O */
-    buffer                    *rb, *wb;
-
-    /** parser */
-    struct request             request;
-    struct request_parser      parser;
-
-    /** el resumen del respuesta a enviar*/
-    enum socks_response_status status;
-
-    // ¿a donde nos tenemos que conectar?
-    struct sockaddr_storage   *origin_addr;
-    socklen_t                 *origin_addr_len;
-    int                       *origin_domain;
-
-    const int                 *client_fd;
-    int                       *origin_fd;
-} request_st;
-
-typedef struct {
-    /** información del cliente */
-    struct sockaddr_storage       client_addr;
-    socklen_t                     client_addr_len;
-    int                           client_fd;
-
-    /** resolución de la dirección del origin server */
-    struct addrinfo              *origin_resolution;
-
-    /** información del origin server */
-    struct sockaddr_storage       origin_addr;
-    socklen_t                     origin_addr_len;
-    int                           origin_domain;
-    int                           origin_fd;
-
-    /** maquinas de estados */
-    struct state_machine          stm;
-
-    /** estados para el client_fd */
-    union {
-        request_st         request;
-    } client;
-
-    struct timeval time;
-
-    int bodyWritten;
-    bool * respDone, * reqDone;
-    uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
-    buffer read_buffer, write_buffer, aux_buffer;
-
-} client_t;
-
 void request_connect(struct selector_key *key, request_st *d);
-
-#define CLIENT_ATTACHMENT(key) ( (client_t *)(key)->data)
 
 static void request_init(const unsigned state, struct selector_key *key);
 
@@ -402,6 +349,11 @@ request_read(struct selector_key *key) {
 
     if(n > 0) {
         request_state_t st = request_consume(aux, &d->parser, &error);
+        register_request(c->client_fd, d->request.headers);
+        if(d->parser.request->method == CONNECT) {
+            register_status_code(c->client_fd, 405);
+            return send_http_code(405, key) ? COPY : ERROR;
+        }
         if(request_is_done( &d->parser, st, 0)) {
             register_request(c->client_fd, d->request.headers);
             if(d->parser.request->method == CONNECT) {

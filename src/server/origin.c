@@ -69,58 +69,6 @@ typedef struct {
     struct state_machine stm;
 } origin_t;
 
-typedef struct {
-    /** buffer utilizado para I/O */
-    buffer                    *rb, *wb;
-
-    /** parser */
-    struct request             request;
-    struct request_parser      parser;
-
-    /** el resumen del respuesta a enviar*/
-    enum socks_response_status status;
-
-    // ¿a donde nos tenemos que conectar?
-    struct sockaddr_storage   *origin_addr;
-    socklen_t                 *origin_addr_len;
-    int                       *origin_domain;
-
-    const int                 *client_fd;
-    int                       *origin_fd;
-} request_st;
-
-typedef struct {
-    /** información del cliente */
-    struct sockaddr_storage       client_addr;
-    socklen_t                     client_addr_len;
-    int                           client_fd;
-
-    /** resolución de la dirección del origin server */
-    struct addrinfo              *origin_resolution;
-
-    /** información del origin server */
-    struct sockaddr_storage       origin_addr;
-    socklen_t                     origin_addr_len;
-    int                           origin_domain;
-    int                           origin_fd;
-
-    /** maquinas de estados */
-    struct state_machine          stm;
-
-    /** estados para el client_fd */
-    union {
-        request_st         request;
-    } client;
-
-    struct timeval time;
-
-    int bodyWritten;
-    bool * respDone, * reqDone;
-    uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
-    buffer read_buffer, write_buffer, aux_buffer;
-
-} client_t;
-
 static void clear_interests(const unsigned state, struct selector_key *key);
 
 static unsigned connected(struct selector_key *key);
@@ -332,9 +280,6 @@ static unsigned headers_read(struct selector_key *key){
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
-            //size_t length = 0;
-            //buffer_read_ptr(&o->buff, &length);
-            //increase_body_length(&o->parser, -length);
             bool transform = false;
             if(transform) {//if transform
                 init_transform(key);

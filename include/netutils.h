@@ -1,3 +1,6 @@
+#ifndef PC_2018_07_NETUTILS_H
+#define PC_2018_07_NETUTILS_H
+
 #include <netinet/in.h>
 
 #include "buffer.h"
@@ -36,3 +39,5 @@ sock_blocking_write(const int fd, buffer *b);
  */
 int
 sock_blocking_copy(const int source, const int dest);
+
+#endif
