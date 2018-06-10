@@ -201,6 +201,9 @@ content_length(const uint8_t c, struct request_parser* p) {
     if(c == '\r') {
         p->buffer[p->i] = 0;
         p->request->content_length = atoi(p->buffer);
+
+        request_reset_buffer(p);
+        p->buffer[p->i++] = c;
         next = request_enter;
     } else if(c != ' ')
         p->buffer[p->i++] = c;
@@ -216,8 +219,9 @@ host(const uint8_t c, struct request_parser* p) {
         p->request->host[p->i] = 0;
         p->request->dest_port = 80;
 
+        request_reset_buffer(p);
+        p->buffer[p->i++] = c;
         next = request_enter;
-
     } else if(c == ':') {
         p->request->host[p->i] = 0;
         request_reset_buffer(p);
