@@ -4,6 +4,7 @@
 #include <stm.h>
 #include <selector.h>
 #include <response.h>
+#include <metrics.h>
 
 transformation_t transformations;
 int transformationCount;
@@ -27,6 +28,7 @@ typedef struct {
     bool * respDone, *reqDone;
     uint8_t  raw_data[BUFF_SIZE];
 
+    struct timeval time;
 
     struct state_machine stm;
 } origin_t;
@@ -52,6 +54,9 @@ typedef struct {
     buffer *b, *aux;
     struct state_machine stm;
     int client_fd;
+
+    struct timeval time;
+    bool timing;
 }transform_t;
 
 static char * state_to_string(const transform_state_t st){
@@ -148,6 +153,11 @@ copy_r(struct selector_key *key) {
     ssize_t n, min;
     size_t size, body;
 
+    if(t->timing) {
+        logTime(TRANSFORMING,&t->time);
+        t->timing = false;
+    }
+
     uint8_t * ptr = buffer_write_ptr(b, &size);
     uint8_t * bodyPtr = buffer_read_ptr(t->aux, &body);
 
@@ -180,6 +190,11 @@ copy_w(struct selector_key *key) {
     if(size == 0){
         selector_remove_interest(key->s, key->fd, OP_WRITE);
         return COPY;
+    }
+
+    if(!t->timing) {
+        startTimer(&t->time);
+        t->timing = true;
     }
 
     n = write(key->fd, ptr, size);

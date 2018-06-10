@@ -16,6 +16,7 @@
 #include "passive.h"
 #include "netutils.h"
 #include "response.h"
+#include "metrics.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
@@ -132,22 +133,14 @@ typedef struct {
         request_st         request;
     } client;
 
-    size_t bodyWritten;
+    struct timeval time;
+
+    int bodyWritten;
     bool * respDone, * reqDone;
     uint8_t raw_buff_a[BUFF_SIZE], raw_buff_b[BUFF_SIZE], raw_buff_aux[BUFF_SIZE];
     buffer read_buffer, write_buffer, aux_buffer;
 
 } client_t;
-
-void startTime(){
-    gettimeofday(&sysTime, NULL);
-}
-
-void printDeltaTime(){
-    struct timeval stop;
-    gettimeofday(&stop, NULL);
-    printf("took %lu\n", stop.tv_usec - sysTime.tv_usec);
-}
 
 void request_connect(struct selector_key *key, request_st *d);
 
@@ -348,6 +341,7 @@ static void client_close(struct selector_key *key) {
 
 static void client_done(struct selector_key* key) {
     log_request(CLIENT_ATTACHMENT(key)->client_fd);
+    log(CLIENTS, 1);
 
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,
@@ -465,6 +459,8 @@ static unsigned
 request_resolv(struct selector_key * key, request_st * d) {
     pthread_t tid;
 
+    startTimer(&CLIENT_ATTACHMENT(key)->time);
+
     //TODO analize error handling. Subbing fro WRITE??
     struct selector_key* k = malloc(sizeof(*key));
     if(k == NULL) {
@@ -499,6 +495,8 @@ request_resolv_done(struct selector_key *key) {
 
     //TODO use status to mark connection errors and report to client
 
+    logTime(DNS, &CLIENT_ATTACHMENT(key)->time);
+
     request_connect(key, d);
     return COPY;
 }
@@ -521,6 +519,8 @@ static unsigned
 copy_r(struct selector_key *key) {
     client_t * c = CLIENT_ATTACHMENT(key);
 
+    startTimer(&c->time);
+
     size_t size;
     ssize_t n;
     buffer* b    = &c->read_buffer;
@@ -537,6 +537,8 @@ copy_r(struct selector_key *key) {
     if(c->bodyWritten == c->client.request.request.content_length) {
         request_read_done(key);
     }
+
+    logTime(REQUEST, &c->time);
     return COPY;
 }
 
@@ -544,6 +546,8 @@ copy_r(struct selector_key *key) {
 static unsigned
 copy_w(struct selector_key *key) {
     client_t * c = CLIENT_ATTACHMENT(key);
+
+    startTimer(&c->time);
 
     size_t size;
     ssize_t n;
@@ -553,6 +557,7 @@ copy_w(struct selector_key *key) {
     if(size == 0) {
         selector_remove_interest(key->s, key->fd, OP_WRITE);
         if(*c->respDone && *c->reqDone) {
+            logTime(RESPONSE, &c->time);
             return DONE;
         } else {
             return COPY;
@@ -564,6 +569,8 @@ copy_w(struct selector_key *key) {
     } else {
         buffer_read_adv(b, n);
     }
+
+    logTime(RESPONSE, &c->time);
 
     return COPY;
 }

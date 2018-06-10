@@ -8,6 +8,7 @@
 #include <pthread.h>
 
 #include <arpa/inet.h>
+#include <metrics.h>
 
 #include "request.h"
 #include "buffer.h"
@@ -63,6 +64,7 @@ typedef struct {
     bool * respDone, *reqDone;
     uint8_t  raw_data[BUFF_SIZE];
 
+    struct timeval time;
 
     struct state_machine stm;
 } origin_t;
@@ -109,6 +111,8 @@ typedef struct {
     union {
         request_st         request;
     } client;
+
+    struct timeval time;
 
     int bodyWritten;
     bool * respDone, * reqDone;
@@ -291,6 +295,7 @@ static unsigned connected(struct selector_key *key){
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
+            logTime(CONN, &ORIGIN_ATTACHMENT(key)->time);
 //            origin_t * o = (origin_t*) key->data;
             //selector_notify_block(key->s,o->client_fd);
             //selector_set_interest_key(key, OP_READ);
@@ -348,12 +353,15 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     size_t size;
     uint8_t *ptr = buffer_write_ptr(b, &size);
 
-    if(size > o->response.header_length){
+    size_t aux = strlen("Proxy-Connection: Close") + 2;
+
+    if(size > o->response.header_length + aux){
         for (size_t i = 0; i < o->response.header_length; i++) {
             ptr[i] = o->response.headers[i];
         }
+        strcpy(ptr + o->response.header_length - 2, "Proxy-Connection: Close\r\n\r\n");
     }
-    buffer_write_adv(b, o->response.header_length);
+    buffer_write_adv(b, o->response.header_length + aux );
 
     selector_set_interest(key->s, o->client_fd, OP_WRITE);
     selector_remove_interest(key->s, o->origin_fd, OP_READ);
@@ -388,6 +396,8 @@ void request_connect(struct selector_key *key, request_st *d) {
         if(errno == EINPROGRESS) {
 
             origin_t * o = origin_new(*fd, key->fd);
+
+            startTimer(&o->time);
 
             selector_status st = selector_register(key->s, *fd, &origin_handler, OP_WRITE, o);         //vos decime cuando puedo escribir en origin_fd (conexion terminada)
 
@@ -479,6 +489,7 @@ copy_r(struct selector_key *key) {
     if(n < 0 || (n == 0 && size != 0)) {
         return RESPONSE_ERROR;
     } else {
+        log(TRAFFIC, n);
         buffer_write_adv(b, n);
     }
     if(o->infd == -1 || o->outfd == -1) {
@@ -518,6 +529,7 @@ copy_w(struct selector_key *key) {
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
+        log(TRAFFIC, (size_t) n);
         buffer_read_adv(b, n);
     }
 

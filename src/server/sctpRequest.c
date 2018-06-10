@@ -1,4 +1,5 @@
 #include "sctpRequest.h"
+#include "metrics.h"
 
 #define CLIENT_ATTACHMENT(key) ( (sctp_client_t *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
