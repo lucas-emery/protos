@@ -224,7 +224,9 @@ host(const uint8_t c, struct request_parser* p) {
         next = request_enter;
 
     } else if(c == ':') {
-        p->i = 0;
+        p->request->host[p->i] = 0;
+        request_reset_buffer(p);
+
         next = request_dest_port;
 
     } else {

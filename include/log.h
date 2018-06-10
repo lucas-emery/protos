@@ -5,22 +5,30 @@
 #include <stdio.h>
 #include <sys/select.h>
 
-struct request_data {
-    struct sockaddr_storage origin_addr;
-    struct sockaddr_storage client_addr;
-    struct timeval start;
-    struct timeval stop;
-    char* request;
-    int status_code;
-};
 
-struct request_data proxy_data[FD_SETSIZE];
+void
+log_request(int client_fd);
 
 void
 init_file();
 
 void
-log_request(struct request_data data);
+register_request(int client_fd, char* request);
+
+void
+register_origin_addr(int client_fd, struct sockaddr_storage origin_addr);
+
+void
+register_client_addr(int client_fd, struct sockaddr_storage client_addr);
+
+void
+register_status_code(int client_fd, int status_code);
+
+void
+register_start(int client_fd);
+
+void
+register_stop(int client_fd);
 
 
 #endif //PC_2018_07_LOG_H

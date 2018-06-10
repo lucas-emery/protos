@@ -213,7 +213,7 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 }
 
 static void origin_done(struct selector_key* key) {
-    gettimeofday(&proxy_data[ORIGIN_ATTACHMENT(key)->client_fd].stop, NULL);
+    register_stop(ORIGIN_ATTACHMENT(key)->client_fd);
 
     const int fds[] = {
         ORIGIN_ATTACHMENT(key)->client_fd,
@@ -324,7 +324,7 @@ static unsigned headers_read(struct selector_key *key){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
-            proxy_data[o->client_fd].status_code = o->response.status_code;
+            register_status_code(o->client_fd, o->response.status_code);
             //size_t length = 0;
             //buffer_read_ptr(&o->buff, &length);
             //increase_body_length(&o->parser, -length);
@@ -392,7 +392,7 @@ void request_connect(struct selector_key *key, request_st *d) {
                 goto finally;
             }
 
-            proxy_data[CLIENT_ATTACHMENT(key)->client_fd].origin_addr = CLIENT_ATTACHMENT(key)->origin_addr;
+            register_origin_addr(CLIENT_ATTACHMENT(key)->client_fd, CLIENT_ATTACHMENT(key)->origin_addr);
             o->respDone = s->respDone;
             o->reqDone = s->reqDone;
             o->wb = &s->read_buffer;
