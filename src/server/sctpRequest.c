@@ -191,9 +191,9 @@ fail:
 
 int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 	int i, read_pos = 0, write_pos = 0;
-	char metric[METRIC_SIZE], type, mediaType[MEDIATYPE_SIZE];
+	uint8_t metric[METRIC_SIZE + 1], type, mediaType[MEDIATYPE_SIZE];
 	
-	for(i=0; i<PASSWORD_SIZE; i++) {
+	for(i=0; i<strlen(password); i++) {
 		if(password[i] != read_buffer[read_pos++]) {
 			return 0;
 		}
@@ -204,15 +204,14 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 		switch(read_buffer[read_pos++]) {
 			case METRIC:
                 type = read_buffer[read_pos++];
-				bzero(metric, sizeof(metric));
-				getMetric(type, metric);
-				if(metric != 0) {
+				bzero(metric, METRIC_SIZE + 1);
+				//getMetric(type, metric);
+
+				if(get_metric(type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
 					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
 					write_buffer[write_pos++] = type; //escribe que tipo de metrica					
-					write_buffer[write_pos++] = metric[0];
-					write_buffer[write_pos++] = metric[1];
-					write_buffer[write_pos++] = metric[2];
-					write_buffer[write_pos++] = metric[3];
+					strcat(write_buffer, metric);
+                    write_pos += METRIC_SIZE;
 				}
 				else {
 					write_buffer[write_pos++] = METRIC_ERROR;

@@ -20,8 +20,7 @@
 #include <netinet/in.h>
 #include <netinet/sctp.h>
 
-#define PASSWORD_SIZE 8
-#define METRIC_SIZE 4
+#define METRIC_SIZE 64
 #define METRIC '0'
 #define CONFIGURATION '1'
 #define METRIC_ERROR 2
