@@ -284,7 +284,7 @@ static unsigned headers_read(struct selector_key *key){
                 selector_remove_interest(key->s, key->fd, OP_WRITE);
                 return COPY;
             }
-            o->transDone = true;
+            *o->transDone = true;
             return COPY;
         }
     }
