@@ -249,6 +249,7 @@ dest_port(const uint8_t c, struct request_parser* p) {
             return request_error;
 
         request_reset_buffer(p);
+        p->buffer[p->i++] = c;
         next = request_enter;
 
     } else
