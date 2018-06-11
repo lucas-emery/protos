@@ -15,6 +15,8 @@
 #include "buffer.h"
 #include "lib.h"
 
+#define SMALLER_BUFF_SIZE 4096
+
 struct response {
     uint8_t * mediaType;
     int chunked;

@@ -34,5 +34,8 @@ bool is_active(const uint8_t *mediaType);
 unsigned init_transform(struct selector_key *key, bool chunked, size_t content_length);
 void transform_headers(struct response * response);
 
+void
+close_transformations();
+
 
 #endif

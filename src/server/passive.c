@@ -201,8 +201,10 @@ static void client_destroy(client_t* s) {
         freeaddrinfo(s->origin_resolution);
         s->origin_resolution = 0;
     }
+    request_close(&s->client.request.parser);
     free(s->reqDone);
     free(s->respDone);
+    free(s->transDone);
     free(s->client.request.request.headers);
     free(s->client.request.request.host);
     free(s);
@@ -399,7 +401,7 @@ request_resolv_blocking(void *data) {
         .ai_next      = NULL,
     };
 
-    char buff[7];
+    char buff[8];
     snprintf(buff, sizeof(buff), "%d", s->client.request.request.dest_port);
 
     getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution);
@@ -423,6 +425,7 @@ request_resolv(struct selector_key * key, request_st * d) {
         selector_set_interest_key(key, OP_WRITE);
     } else {
         memcpy(k, key, sizeof(*k));
+
         if(-1 == pthread_create(&tid, 0, request_resolv_blocking, k)) {
             d->status = status_general_SOCKS_server_failure;
             selector_set_interest_key(key, OP_WRITE);
@@ -467,7 +470,6 @@ request_read_done(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
     client_t *c      =  CLIENT_ATTACHMENT(key);
     *c->reqDone = true;
-    request_close(&d->parser);
 }
 
 static unsigned

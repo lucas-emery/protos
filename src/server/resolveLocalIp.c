@@ -12,6 +12,7 @@ local_ip_resolv(int port_number) {
     char host[NI_MAXHOST];
 
     if (getifaddrs(&ifaddr) == -1) {
+        free(ifaddr);
         perror("getifaddrs");
         exit(EXIT_FAILURE);
     }
@@ -32,8 +33,17 @@ local_ip_resolv(int port_number) {
         }
     }
 
+    free(ifaddr);
+
     if(local_ips_count >= IP_MAX) {
         DieWithSystemMessage("Too many local ips");
+    }
+}
+
+void
+free_ips() {
+    for (int i = 0; i < local_ips_count; ++i) {
+        free(local_ips[i]);
     }
 }
 

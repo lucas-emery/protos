@@ -30,4 +30,8 @@ void
 register_stop(int client_fd);
 
 
+void
+close_log_file();
+
+
 #endif //PC_2018_07_LOG_H

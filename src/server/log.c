@@ -23,16 +23,17 @@ init_log() {
     file = fopen("access.log", "w");
     fprintf(file, "%-20s%-20s%-15s%-50s%-10s\n", "Client ip", "Server ip", "Duration (\xC2\xB5s)", "Request", "Status code");
 
-    proxy_data = malloc(FD_SETSIZE * sizeof(struct request_data));
+    proxy_data = calloc(1, FD_SETSIZE * sizeof(struct request_data));
 
     for (int i = 0; i < FD_SETSIZE; ++i) {
         proxy_data[i].origin_addr = calloc(1, sizeof(struct sockaddr_storage) );
         proxy_data[i].client_addr = calloc(1, sizeof(struct sockaddr_storage) );
+        proxy_data[i].request = calloc(1, 100);
     }
 }
 
 void
-close_log() {
+close_log_file() {
     fclose(file);
 
     for (int i = 0; i < FD_SETSIZE; ++i) {
@@ -48,9 +49,9 @@ static void
 add_entry(struct sockaddr_storage* origin_addr, struct sockaddr_storage* client_addr,
           long int duration, char* request, int status_code) {
 
-    char ip_client_buff[INET6_ADDRSTRLEN];
-    char ip_origin_buff[INET6_ADDRSTRLEN];
-    char str1[10];
+    char ip_client_buff[INET6_ADDRSTRLEN] = {0};
+    char ip_origin_buff[INET6_ADDRSTRLEN] = {0};
+    char str1[10] = {0};
 
     sprintf(str1, "%d", status_code);
 
@@ -60,7 +61,7 @@ add_entry(struct sockaddr_storage* origin_addr, struct sockaddr_storage* client_
             ip_origin_buff, INET6_ADDRSTRLEN);
 
     fprintf(file, "%-20s%-20s%-15lu%-50s%-10s\n", ip_client_buff, ip_origin_buff,
-            duration, request, status_code == 0 ? "-" : str1);
+            duration, request, str1);
 }
 
 void
@@ -77,20 +78,16 @@ log_request(int client_fd) {
 void
 register_request(int client_fd, char* request) {
     int i;
-    char* request_header = malloc(100);
 
-    for (i = 0; request[i] != '\r' && i <= REQUEST_LENGTH; i++) {
-        request_header[i] = request[i];
+    for (i = 0; request[i] != '\r' && i <= REQUEST_LENGTH; i++);
+
+    strncpy(proxy_data[client_fd].request, request, i);
+
+    if(i >= REQUEST_LENGTH) {
+        proxy_data[client_fd].request[i++] = '.';
+        proxy_data[client_fd].request[i++] = '.';
+        proxy_data[client_fd].request[i++] = '.';
     }
-
-    if(strlen(request_header) >= REQUEST_LENGTH) {
-        request_header[i++] = '.';
-        request_header[i++] = '.';
-        request_header[i++] = '.';
-    }
-
-    request_header[i] = 0;
-    proxy_data[client_fd].request = request_header;
 }
 
 void

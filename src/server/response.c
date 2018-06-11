@@ -72,18 +72,18 @@ void
 response_parser_init (struct response_parser *p) {
     p->state = response_version;
     memset(p->response, 0, sizeof(*(p->response)));
-    p->response->mediaType = malloc(BUFF_SIZE);
+    p->response->mediaType = calloc(1, SMALLER_BUFF_SIZE);
     p->response->chunked = FALSE;
-    p->response->headers = malloc(BUFF_SIZE);
+    p->response->headers = calloc(1, BUFF_SIZE);
     p->response->header_length = 0;
     p->response->body_length = 0;
-    p->buffer = malloc(BUFF_SIZE);
+    p->buffer = calloc(1, SMALLER_BUFF_SIZE);
 }
 
 static void
 response_reset_buffer(struct response_parser* p) {
     p->i = 0;
-    bzero(p->buffer, BUFF_SIZE);
+    bzero(p->buffer, SMALLER_BUFF_SIZE);
 }
 
 bool

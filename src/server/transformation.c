@@ -106,7 +106,7 @@ static const struct state_definition * transform_describe_states(void){
 
 
 transform_t * transform_new(int client_fd){
-    transform_t * ret = malloc(sizeof(transform_t));
+    transform_t * ret = calloc(1, sizeof(transform_t));
 
     if(ret == NULL)
         return NULL;
@@ -330,8 +330,9 @@ copy_w(struct selector_key *key) {
 void register_transformation(const uint8_t *mediaType, transformation_type_t type) {
     int index = get_transformation(mediaType);
     if(index < 0){
-        transformation_t * new = malloc(sizeof(transformation_t));
-        new->mediaType = strdup((char*)mediaType);
+        transformation_t * new = calloc(1, sizeof(transformation_t));
+        new->mediaType = calloc(1, strlen(mediaType));
+        strcpy(new->mediaType, (char*)mediaType);
         new->type = type;
 
         if(transformationCount == size){
@@ -404,6 +405,15 @@ bool is_active(const uint8_t *mediaType){
 transformation_t * listAll(int* count) {
     *count = transformationCount;
     return *transformations;
+}
+
+void
+close_transformations() {
+    for (int i = 0; i < transformationCount; ++i) {
+        free(transformations[i]->mediaType);
+        free(transformations[i]);
+    }
+    free(transformations);
 }
 
 

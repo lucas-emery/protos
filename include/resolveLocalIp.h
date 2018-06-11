@@ -23,4 +23,7 @@ local_ip_resolv(int port_number);
 bool
 check_local_ip(struct sockaddr_storage* origin_addr);
 
+void
+free_ips();
+
 #endif //PC_2018_07_RESOLVELOCALIP_H

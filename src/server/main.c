@@ -77,7 +77,9 @@ void * print_table(){
 }
 
 static void sigterm_handler(const int signal){
-    printf("Signal %d, graceful exit\n", signal);
+    close_log_file();
+    free_ips();
+    close_transformations();
     done = true;
 }
 

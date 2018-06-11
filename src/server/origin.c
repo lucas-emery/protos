@@ -164,8 +164,13 @@ static void origin_done(struct selector_key* key) {
 
 static void origin_destroy(origin_t* o){
     if(o != NULL) {
+        ssize_t size;
+        response_close(&o->parser);
         free(o->response.headers);
         free(o->response.mediaType);
+        buffer_reset(&o->buff);
+        uint8_t* data = buffer_write_ptr(&o->buff, &size);
+        free(data);
         free(o);
     }
 }
@@ -285,7 +290,6 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     selector_remove_interest(key->s, o->origin_fd, OP_READ);
     selector_notify_block(key->s, o->origin_fd);
 
-    response_close(&o->parser);
 }
 
 static unsigned transform(struct selector_key *key){
