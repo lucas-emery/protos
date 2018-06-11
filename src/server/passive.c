@@ -401,13 +401,18 @@ request_resolv_blocking(void *data) {
         .ai_next      = NULL,
     };
 
-    char buff[8];
-    snprintf(buff, sizeof(buff), "%d", s->client.request.request.dest_port);
+    char* buff = calloc(1,8);
+
+    if(s->client.request.request.dest_port == 0) {
+        buff = "http";
+    } else
+        snprintf(buff, sizeof(buff), "%d", s->client.request.request.dest_port);
 
     getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution);
     selector_notify_block(key->s, key->fd);
 
     free(data);
+    free(buff);
 
     return NULL;
 }
