@@ -16,11 +16,10 @@ static void sctp_request_init(const unsigned state, struct selector_key *key) {
 static unsigned sctp_request_read(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    struct sctp_sndrcvinfo sndrcvinfo;
-    int flags, n;
 
+    ssize_t n;
     bzero(d->read_buffer, MAX_BUFFER_SIZE);
-    n = sctp_recvmsg(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, &sndrcvinfo, &flags);
+    n = recv(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, NULL);
     if(n > 0) {
     	if(sctp_request_parser(d->read_buffer, d->write_buffer, n) > 0) {
         	selector_set_interest_key(key, OP_WRITE);
@@ -31,7 +30,7 @@ static unsigned sctp_request_read(struct selector_key *key) {
     }
     else
     {
-        printf("%d\n", n);
+        printf("%d\t%s\n", n, strerror(errno));
     	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
     }
@@ -44,7 +43,7 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    int n = sctp_sendmsg(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL, 0, 0, 0, 0, 0, 0);
+    ssize_t n = send(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL);
     if(n == -1) {
         return SCTP_ERROR;
     }

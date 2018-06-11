@@ -24,7 +24,7 @@
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
 #define PORT 8090
-#define SCTP_PORT 9090
+#define SCTP_PORT 9095
 #define LISTEN 30
 #define SCTP_LISTEN 5
 
@@ -45,7 +45,7 @@ typedef struct {
     char state[32];
 } table_entry_t;
 
-table_entry_t table[128];
+table_entry_t table[1024];
 
 void * print_table(){
     while(1){
