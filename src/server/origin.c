@@ -250,7 +250,7 @@ static unsigned headers_read(struct selector_key *key){
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
-            bool transform = isActive(o->response.mediaType);
+            bool transform = is_active(o->response.mediaType);
             if (transform) {
                 transform_headers(&o->response);
                 init_transform(key, o->response.chunked, o->response.body_length);

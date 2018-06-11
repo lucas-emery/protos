@@ -324,8 +324,8 @@ copy_w(struct selector_key *key) {
     return COPY;
 }
 
-void registerTransformation(const uint8_t * mediaType, transformation_type_t type) {
-    int index = getTransformation(mediaType);
+void register_transformation(const uint8_t *mediaType, transformation_type_t type) {
+    int index = get_transformation(mediaType);
     if(index < 0){
         transformation_t * new = malloc(sizeof(transformation_t));
         new->mediaType = strdup((char*)mediaType);
@@ -342,8 +342,8 @@ void registerTransformation(const uint8_t * mediaType, transformation_type_t typ
     }
 }
 
-void unregisterTransformation(const uint8_t * mediaType) {
-    int index = getTransformation(mediaType);
+void unregister_transformation(const uint8_t *mediaType) {
+    int index = get_transformation(mediaType);
     if(index < 0){
         return;
     }
@@ -358,17 +358,27 @@ void unregisterTransformation(const uint8_t * mediaType) {
     transformations[transformationCount--] = NULL;
 }
 
-int getTransformation(const uint8_t * mediaType){
+int get_transformation(const uint8_t *mediaType){
+    char* charset = strchr((char*) mediaType, ';');
+    size_t charset_length = charset ==  NULL ? 0 : strlen(charset);
+
     for (int i = 0; i < transformationCount; ++i) {
-        if(strcmp(transformations[i]->mediaType, (char*)mediaType) == 0){
+        char* current = transformations[i]->mediaType;
+        char* current_charset = strchr(current, ';');
+
+        if(current_charset != NULL && strcmp(current, (char*)mediaType) == 0){
             return i;
+
+        } else if(current_charset == NULL &&
+                  strncmp(current, (char*) mediaType, strlen((char*)mediaType) - charset_length) == 0) {
+                return i;
         }
     }
     return -1;
 }
 
-const char * getExe(const uint8_t * mediaType){
-    int index = getTransformation(mediaType);
+const char * get_exe(const uint8_t *mediaType){
+    int index = get_transformation(mediaType);
 
     if(index < 0)
         return NULL;
@@ -384,8 +394,8 @@ const char * getExe(const uint8_t * mediaType){
 
 }
 
-bool isActive(const uint8_t * mediaType){
-    return getTransformation(mediaType) != -1;
+bool is_active(const uint8_t *mediaType){
+    return get_transformation(mediaType) != -1;
 }
 
 transformation_t * listAll(int* count) {
@@ -424,7 +434,7 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
 
         char *args[] = {NULL};
 
-        if(-1 == execv(getExe(o->response.mediaType), args)) {
+        if(-1 == execv(get_exe(o->response.mediaType), args)) {
             close(in [R]);
             close(out[W]);
             ret = 1;

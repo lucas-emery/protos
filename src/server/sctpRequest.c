@@ -222,9 +222,9 @@ int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 				write_buffer[write_pos++] = CONFIGURATION; //escribe que es una configuracion
 				write_buffer[write_pos++] = type; //escribe que tipo de configuracion
                 if(type == '0') {
-                    unregisterTransformation(mediaType);
+                    unregister_transformation(mediaType);
                 } else {
-				    registerTransformation(mediaType, (transformation_type_t) type-'0'-1);
+                    register_transformation(mediaType, (transformation_type_t) type - '0' - 1);
                 }
 			break;
 		}
