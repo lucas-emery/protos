@@ -161,12 +161,12 @@ static char * state_to_string(sock_state_t state){
 static client_t * client_new(int client_fd) {
     client_t *ret;
 
-    ret = malloc(sizeof(*ret));
+    ret = malloc(sizeof(client_t));
 
     if(ret == NULL) {
         return ret;
     }
-    memset(ret, 0x00, sizeof(*ret));
+    memset(ret, 0x00, sizeof(client_t));
 
     table[client_fd].type = CLIENT;
     strcpy(table[client_fd].state,"REQUEST_HEADERS");

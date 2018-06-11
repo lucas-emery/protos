@@ -261,16 +261,18 @@ copy_r(struct selector_key *key) {
 bool
 get_chunk_length(uint8_t * data, size_t size, size_t * length, size_t * offset) {
     bool valid = false;
-    size_t i;
-    for (i = 0; i < size; i++) {
+    size_t start, i;
+    for(start = 0; (data[start] == '\r' || data[start] == '\n') && start < size; start++);
+    for (i = start; i < size; i++) {
         if(data[i] == '\n') {
             valid = true;
+            i++;
             break;
         }
     }
 
     if(valid) {
-        *length = (size_t) strtol((char*)data, NULL, 16);
+        *length = (size_t) strtol((char*) data + start, NULL, 16);
         *offset = i;
     }
     return valid;

@@ -10,6 +10,7 @@
 #include <metrics.h>
 #include <transformation.h>
 #include <passive.h>
+#include <origin.h>
 
 #include "request.h"
 #include "passive.h"
@@ -116,12 +117,12 @@ static const struct state_definition * origin_describe_states(void){
 static origin_t * origin_new(int origin_fd, int client_fd) {
     origin_t * ret;
 
-    ret = malloc(sizeof(*ret));
+    ret = malloc(sizeof(origin_t));
 
     if(ret == NULL) {
         return NULL;
     }
-    memset(ret, 0x00, sizeof(*ret));
+    memset(ret, 0x00, sizeof(origin_t));
 
     table[origin_fd].type = ORIGIN;
     table[origin_fd].peer = client_fd;
