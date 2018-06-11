@@ -481,6 +481,7 @@ copy_r(struct selector_key *key) {
         buffer_write_adv(b, n);
     }
     selector_add_interest(key->s,c->origin_fd, OP_WRITE);
+    selector_add_interest(key->s,c->origin_fd, OP_READ);
     c->bodyWritten += n;
     if(c->bodyWritten == c->client.request.request.content_length) {
         request_read_done(key);
@@ -503,7 +504,7 @@ copy_w(struct selector_key *key) {
 
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0) {
-        selector_remove_interest(key->s, key->fd, OP_WRITE);
+        //selector_remove_interest(key->s, key->fd, OP_WRITE);
         if(*c->respDone && *c->reqDone && *c->transDone ) {
             logTime(RESPONSE, &c->time);
             return DONE;

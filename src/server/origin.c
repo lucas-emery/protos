@@ -111,6 +111,7 @@ static const struct state_definition origin_statbl[] = {
         .on_write_ready   = connected,
     },{
         .state            = HEADERS,
+        .on_write_ready   = copy_w,
         .on_arrival       = headers_init,              //TODO
         .on_read_ready    = headers_read,              //TODO
         .on_departure     = headers_flush
@@ -245,7 +246,9 @@ static unsigned connected(struct selector_key *key){
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
             logTime(CONN, &ORIGIN_ATTACHMENT(key)->time);
-            return COPY;
+            selector_add_interest(key->s, key->fd, OP_WRITE);
+            selector_add_interest(key->s, key->fd, OP_READ);
+            return HEADERS;
         }
     }
     //TODO Report error to client instead of just closing the connection (aca o en origin_done?)
@@ -307,8 +310,8 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     }
     buffer_write_adv(b, o->response.header_length + aux );
 
-    selector_set_interest(key->s, o->client_fd, OP_WRITE);
-    selector_remove_interest(key->s, o->origin_fd, OP_READ);
+    selector_add_interest(key->s, o->client_fd, OP_WRITE);
+    //selector_remove_interest(key->s, o->origin_fd, OP_READ);
     selector_notify_block(key->s, o->origin_fd);
 
     response_close(&o->parser);
@@ -486,7 +489,7 @@ copy_w(struct selector_key *key) {
     if(*o->respDone && *o->reqDone)
         return RESPONSE_DONE;
 
-    return COPY;
+    return o->stm.current->state;
 }
 
 

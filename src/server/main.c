@@ -11,6 +11,7 @@
 #include <netinet/tcp.h>
 #include <netinet/sctp.h>
 #include <arpa/inet.h>
+#include <transformation.h>
 
 #include "selector.h"
 #include "passive.h"
