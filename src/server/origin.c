@@ -279,11 +279,12 @@ static unsigned headers_read(struct selector_key *key){
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
             bool transform = isActive(o->response.mediaType);
-            if(transform) {
+//            if(transform) {
+                transform_headers(o->response);
                 init_transform(key);
                 selector_remove_interest(key->s, key->fd, OP_WRITE);
                 return COPY;
-            }
+//            }
             *o->transDone = true;
             return COPY;
         }

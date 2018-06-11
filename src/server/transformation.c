@@ -3,9 +3,8 @@
 #include "transformation.h"
 #include <stm.h>
 #include <selector.h>
-#include <response.h>
+
 #include <metrics.h>
-#include <transformation.h>
 
 
 #define BLOCK 5
@@ -166,6 +165,70 @@ const struct fd_handler transform_handler = {
         .handle_read   = transform_read,
         .handle_write  = transform_write,
 };
+
+char *substring(char *string, int position, int length)
+{
+    char *pointer;
+    int c;
+
+    pointer = malloc(length+1);
+
+    if( pointer == NULL )
+        exit(EXIT_FAILURE);
+
+    for( c = 0 ; c < length ; c++ )
+        *(pointer+c) = *((string+position-1)+c);
+
+    *(pointer+c) = '\0';
+
+    return pointer;
+}
+
+void
+transform_headers(struct response response) {
+    if(response.body_length != 0) {
+        int j, header_length = response.header_length;
+        uint8_t *headers = response.headers;
+        char content[header_length];
+        int before, i;
+        bool found = false;
+
+        memcpy(content, strstr(headers, "Content-Length"), header_length);
+
+        for (j = 0; content[j] != '\r'; j++);
+
+        content[j] = 0;
+
+        char *f, *e;
+        int length;
+
+        for (i = 0; headers[i] != '\n' ; i++);
+
+        length = strlen(headers);
+
+        f = substring(headers, 1, i - 1 );
+        e = substring(headers, i, length-i+1);
+
+        strcpy(headers, "");
+        strcat(headers, f);
+        free(f);
+        strcat(headers, "\r\nTransfer-Encoding: chunked");
+        strcat(headers, e);
+        free(e);
+
+        for (; before < header_length && !found; before++) {
+            char c = headers[before];
+            if(c == 'C') {
+                if(strncmp(headers + before, content, j) == 0)
+                    found = true;
+            }
+        }
+
+        before--;
+
+        memmove(headers + before - 2, headers + before + strlen(content) + 2, strlen(headers) - before - strlen(content));
+    }
+}
 
 static unsigned
 copy_r(struct selector_key *key) {
@@ -370,3 +433,4 @@ unsigned init_transform(struct selector_key *key){
     selector_register(key->s, o->outfd, &transform_handler, OP_READ, tOut);
     return ret;
 }
+

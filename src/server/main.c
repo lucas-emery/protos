@@ -20,6 +20,7 @@
 #include "message.h"
 #include "log.h"
 
+#include "transformation.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
