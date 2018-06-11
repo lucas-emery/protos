@@ -22,5 +22,6 @@ void DieWithSystemMessage(const char *msg);
 void DieWithUserMessage(const char *msg, const char *detail);
 int isMediaType(const char * param);
 void getPassword(char * password);
+char * hash(unsigned char *str);
 
 #endif

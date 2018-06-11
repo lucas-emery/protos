@@ -13,7 +13,11 @@ int main(int argc, char const *argv[]) {
 		return 1;
 	}
 
+	printf("\n");
 	getPassword(password);
+	printf("\n");
+	//char * hashedPassword = hash(password);
+	//printf("%s\n", hashedPassword);
 
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
 	 
@@ -94,47 +98,14 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 					break;
 					case 'c':
 						switch(params[i][2]) {
+							case '0':
 							case '1':
-								if(i < cantParams-1) {
-									i++;
-									buffer[pos++] = '1';
-									buffer[pos++] = '1';
-									if(isMediaType(params[i])) {
-										strcat(buffer, params[i]);
-										pos += strlen(params[i]);
-										buffer[pos++] = ' ';
-									} else {
-										printf("Error de media type\n");
-										return 1;
-									}
-								} else {
-									printf("Error de parametro\n");
-									return 1;
-								}
-							break;
 							case '2':
-								if(i < cantParams-1) {
-									i++;
-									buffer[pos++] = '1';
-									buffer[pos++] = '2';
-									if(isMediaType(params[i])) {
-										strcat(buffer, params[i]);
-										pos += strlen(params[i]);
-										buffer[pos++] = ' ';
-									} else {
-										printf("Error de media type\n");
-										return 1;
-									}
-								} else {
-									printf("Error de parametro\n");
-									return 1;
-								}
-							break;
 							case '3':
 								if(i < cantParams-1) {
-									i++;
 									buffer[pos++] = '1';
-									buffer[pos++] = '3';
+									buffer[pos++] = params[i][2];
+									i++;
 									if(isMediaType(params[i])) {
 										strcat(buffer, params[i]);
 										pos += strlen(params[i]);
@@ -212,15 +183,16 @@ void parseResponse(char * buffer, int requests) {
 				printf("\n");
 			break;
 			case '1':
-				printf("Se ha aplicado el filtro %c\n", buffer[j++]);	
+				if(buffer[j] == '0') {
+					printf("Se han borrado todos filtros\n");
+				} else {
+					printf("Se ha aplicado el filtro %c\n", buffer[j++]);
+				}	
 			break;
 			case '2':
 				printf("Error en la metrica %c\n", buffer[j++]);
 			break;
 
-			break;
-			case '3':
-				printf("Error aplicando el filtro %c\n", buffer[j++]);
 			break;
 		}
 	}
@@ -261,4 +233,19 @@ void DieWithUserMessage(const char *msg, const char *detail) {
 void DieWithSystemMessage(const char *msg) {
   perror(msg);
   exit(1);
+}
+
+char * hash(unsigned char *str)
+{
+    unsigned long hash = 5381;
+    int c;
+
+    while (c = *str++)
+        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+
+    int n = snprintf(NULL, 0, "%lu", hash);
+	char * buf = malloc(n + 1);
+	snprintf(buf, n+1, "%lu", hash);
+
+    return buf;
 }

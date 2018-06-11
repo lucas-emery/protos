@@ -3,7 +3,6 @@
 #include <string.h>  // memset
 #include <assert.h>  // assert
 #include <errno.h>
-#include <time.h>
 #include <unistd.h>  // close
 #include <pthread.h>
 
@@ -13,19 +12,14 @@
 #include <passive.h>
 
 #include "request.h"
-#include "buffer.h"
-#include "stm.h"
 #include "passive.h"
 #include "netutils.h"
-#include "response.h"
 #include "log.h"
+#include "origin.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
-#define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
-#define CLIENT_ATTACHMENT(key) ( (client_t *)(key)->data)
 
 void startTime();
-unsigned init_transform(struct selector_key *key);
 void printDeltaTime();
 
 enum type{
@@ -51,24 +45,6 @@ typedef enum {
     RESPONSE_DONE,
     RESPONSE_ERROR,
 } origin_state_t;
-
-typedef struct {
-    int origin_fd;
-    int client_fd;
-    int infd, outfd;
-    buffer buff;
-    struct response response;
-    struct response_parser parser;
-    bool readFirst;
-
-    buffer *rb , *wb, *tb;
-    bool * respDone, *reqDone, *transDone;
-    uint8_t  raw_data[BUFF_SIZE];
-
-    struct timeval time;
-
-    struct state_machine stm;
-} origin_t;
 
 static void clear_interests(const unsigned state, struct selector_key *key);
 
@@ -271,19 +247,16 @@ static unsigned headers_read(struct selector_key *key){
     ssize_t read = recv(o->origin_fd, ptr, size, 0);
 
     bool error;
-    if(!o->readFirst){
-        parser_headers(&o->parser, ptr);
-        o->readFirst = true;
-    }
 
     if(read > 0){
         buffer_write_adv(&o->buff, read);
         int s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
-            bool transform = isActive(o->response.mediaType);
-            if(transform) {
-                init_transform(key);
+            bool transform = is_active(o->response.mediaType);
+            if (transform) {
+                transform_headers(&o->response);
+                init_transform(key, o->response.chunked, o->response.body_length);
                 selector_remove_interest(key->s, key->fd, OP_WRITE);
                 return COPY;
             }
@@ -300,15 +273,15 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     size_t size;
     uint8_t *ptr = buffer_write_ptr(b, &size);
 
-    size_t aux = strlen("Proxy-Connection: Close") + 2;
+//    size_t aux = strlen("Proxy-Connection: Close") + 2;
 
-    if(size > o->response.header_length + aux){
+    if(size > o->response.header_length){
         for (size_t i = 0; i < o->response.header_length; i++) {
             ptr[i] = o->response.headers[i];
         }
-        strcpy(ptr + o->response.header_length - 2, "Proxy-Connection: Close\r\n\r\n");
+//        strcpy((char*)(ptr + o->response.header_length - 2), "Proxy-Connection: Close\r\n\r\n");
     }
-    buffer_write_adv(b, o->response.header_length + aux );
+    buffer_write_adv(b, o->response.header_length );
 
     selector_add_interest(key->s, o->client_fd, OP_WRITE);
     //selector_remove_interest(key->s, o->origin_fd, OP_READ);
@@ -434,10 +407,10 @@ copy_r(struct selector_key *key) {
 
     uint8_t * ptr= buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n < 0 || ((n == 0 && size != 0)) && *o->transDone) {
+    if(n < 0 || (n == 0 && size != 0 && *o->transDone)) {
         return RESPONSE_ERROR;
     } else {
-        log(TRAFFIC, n);
+        log_metric(TRAFFIC, n);
         buffer_write_adv(b, n);
     }
     if(o->infd == -1 || o->outfd == -1) {
@@ -478,7 +451,7 @@ copy_w(struct selector_key *key) {
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
-        log(TRAFFIC, (size_t) n);
+        log_metric(TRAFFIC, (size_t) n);
         buffer_read_adv(b, n);
     }
 

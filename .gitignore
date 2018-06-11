@@ -1,7 +1,6 @@
 
 *
 *.o
-!/bin/
 !.gitignore
 !/src/
 !Makefile
