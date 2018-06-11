@@ -5,7 +5,7 @@ int main(){
 	char c;
 	while((c = getchar()) != EOF){
 		putchar(c);
-		fputc(fp, c);
+		fputc(c, fp);
 	}
 	fclose(fp);
 	return 0;

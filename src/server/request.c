@@ -119,10 +119,10 @@ method(const uint8_t c, struct request_parser* p) {
             p->request->method = POST;
         } else if(strcmp(p->buffer, "HEAD") == 0) {
             p->request->method = HEAD;
-        } else if(strcmp(p->buffer, "CONNECT") == 0) {
-            p->request->method = CONNECT;
+        } else if(strcmp(p->buffer, "DELETE") == 0) {
+            p->request->method = DELETE;
         } else {
-            return request_error;
+            p->request->method = UNSUPPORTED;
         }
 
         request_reset_buffer(p);

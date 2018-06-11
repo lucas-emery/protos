@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include "metrics.h"
 #include <string.h>
+#include <sys/time.h>
 
 #define KB 1024
 #define US2MS 1000
@@ -68,7 +69,7 @@ static void log_util(pack_t * pack, size_t n){
     pack->carry  = pack->carry%pack->cos;
 }
 
-void log(metric_t type, size_t n){
+void log_metric(metric_t type, size_t n){
     log_util(&metrics[type], n);
 }
 
@@ -77,7 +78,7 @@ int get_metric(metric_t type, uint8_t * buffer, size_t size){
     snprintf(aux, KB, FORMAT, metrics[type].string, metrics[type].round);
     if(strlen(aux) > size)
         return -1;
-    strcpy(buffer, aux);
+    strcpy((char*)buffer, aux);
     return 0;
 }
 
@@ -94,7 +95,7 @@ void logTime(metric_t type, struct timeval * t){
 
     size_t deltaSec = now.tv_sec - t->tv_sec;
 
-    log(type, deltaSec*S2US + now.tv_usec - t->tv_usec);
+    log_metric(type, deltaSec * S2US + now.tv_usec - t->tv_usec);
 }
 
 

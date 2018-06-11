@@ -1,5 +1,4 @@
 #include "sctpRequest.h"
-#include "metrics.h"
 
 #define CLIENT_ATTACHMENT(key) ( (sctp_client_t *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -15,22 +14,18 @@ static void sctp_request_init(const unsigned state, struct selector_key *key) {
 
 static unsigned sctp_request_read(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
-
-
     ssize_t n;
+
     bzero(d->read_buffer, MAX_BUFFER_SIZE);
-    n = recv(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, NULL);
+    n = recv(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, 0);
     if(n > 0) {
     	if(sctp_request_parser(d->read_buffer, d->write_buffer, n) > 0) {
         	selector_set_interest_key(key, OP_WRITE);
         	return SCTP_WRITE;
-        }
-        else
+        } else
             return SCTP_ERROR;
-    }
-    else
-    {
-        printf("%d\t%s\n", n, strerror(errno));
+    } else {
+        printf("%ld\t%s\n", n, strerror(errno));
     	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
     }
@@ -43,7 +38,7 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    ssize_t n = send(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, (struct sockaddr *) NULL);
+    ssize_t n = send(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, MSG_NOSIGNAL);
     if(n == -1) {
         return SCTP_ERROR;
     }
@@ -188,7 +183,7 @@ fail:
     sctp_client_destroy(state);
 }
 
-int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
+int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 	int i, read_pos = 0, write_pos = 0;
 	uint8_t metric[METRIC_SIZE + 1], type, mediaType[MEDIATYPE_SIZE];
 	
@@ -204,10 +199,10 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 			case METRIC:
                 type = read_buffer[read_pos++];
 				bzero(metric, METRIC_SIZE + 1);
-				if(get_metric(type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
+				if(get_metric((metric_t) type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
 					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
 					write_buffer[write_pos++] = type; //escribe que tipo de metrica					
-					strcat(write_buffer, metric);
+					strcat((char*)write_buffer, (char*)metric);
                     write_pos += METRIC_SIZE;
 				}
 				else {
@@ -229,7 +224,7 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
                 if(type == '0') {
                     unregisterTransformation(mediaType);
                 } else {
-				    registerTransformation(mediaType, type-'0'-1);
+				    registerTransformation(mediaType, (transformation_type_t) type-'0'-1);
                 }
 			break;
 		}

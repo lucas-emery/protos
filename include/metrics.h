@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <stdint.h>
+#include <stdio.h>
 
 typedef enum {
     TRAFFIC,
@@ -14,7 +15,7 @@ typedef enum {
     TRANSFORMING
 } metric_t;
 
-void log(metric_t type, size_t n);
+void log_metric(metric_t type, size_t n);
 
 int get_metric(metric_t type, uint8_t * buffer, size_t size);
 

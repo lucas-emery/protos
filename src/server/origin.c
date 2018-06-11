@@ -407,7 +407,7 @@ copy_r(struct selector_key *key) {
     if(n < 0 || (n == 0 && size != 0 && *o->transDone)) {
         return RESPONSE_ERROR;
     } else {
-        log(TRAFFIC, n);
+        log_metric(TRAFFIC, n);
         buffer_write_adv(b, n);
     }
     if(o->infd == -1 || o->outfd == -1) {
@@ -448,7 +448,7 @@ copy_w(struct selector_key *key) {
     if(n == -1) {
         return RESPONSE_ERROR;
     } else {
-        log(TRAFFIC, (size_t) n);
+        log_metric(TRAFFIC, (size_t) n);
         buffer_read_adv(b, n);
     }
 

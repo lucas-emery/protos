@@ -291,7 +291,7 @@ static void client_close(struct selector_key *key) {
 
 static void client_done(struct selector_key* key) {
     log_request(CLIENT_ATTACHMENT(key)->client_fd);
-    log(CLIENTS, 1);
+    log_metric(CLIENTS, 1);
 
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,
@@ -355,7 +355,7 @@ request_read(struct selector_key *key) {
         register_request(c->client_fd, d->request.headers);
         if(request_is_done( &d->parser, st, 0)) {
             register_request(c->client_fd, d->request.headers);
-            if(d->parser.request->method == CONNECT) {
+            if(d->parser.request->method == UNSUPPORTED) {
                 register_status_code(c->client_fd, 405);
                 return send_http_code(405, key) ? COPY : ERROR;
             } else {

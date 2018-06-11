@@ -11,7 +11,6 @@
 
 #define BLOCK 5
 #define EXE_COUNT 2
-#define MAX_STRING_LENGTH (sizeof(size_t)*2)+1
 
 transformation_t ** transformations;
 int transformationCount, size;
@@ -158,16 +157,6 @@ const struct fd_handler transform_handler = {
         .handle_write  = transform_write,
 };
 
-char * substring(char * string, int position, size_t length) {
-    char * sub;
-
-    sub = malloc(length+1);
-    memcpy(sub, &string[position], length);
-    sub[length] = 0;
-
-    return sub;
-}
-
 void
 transform_headers(struct response * response) {
     int i, header_length = response->header_length;
@@ -269,7 +258,7 @@ copy_r(struct selector_key *key) {
 }
 
 bool
-get_chunk_length(char * data, size_t size, size_t * length, size_t * offset) {
+get_chunk_length(uint8_t * data, size_t size, size_t * length, size_t * offset) {
     bool valid = false;
     size_t i;
     for (i = 0; i < size; i++) {
@@ -280,7 +269,7 @@ get_chunk_length(char * data, size_t size, size_t * length, size_t * offset) {
     }
 
     if(valid) {
-        *length = (size_t) strtol(data, NULL, 16);
+        *length = (size_t) strtol((char*)data, NULL, 16);
         *offset = i;
     }
     return valid;
@@ -335,13 +324,11 @@ copy_w(struct selector_key *key) {
     return COPY;
 }
 
-int equals(transformation_t * transformation1, transformation_t * transformation2);
-
-void registerTransformation(const char* mediaType, transformation_type_t type) {
+void registerTransformation(const uint8_t * mediaType, transformation_type_t type) {
     int index = getTransformation(mediaType);
     if(index < 0){
         transformation_t * new = malloc(sizeof(transformation_t));
-        new->mediaType = strdup(mediaType);
+        new->mediaType = strdup((char*)mediaType);
         new->type = type;
 
         if(transformationCount == size){
@@ -355,7 +342,7 @@ void registerTransformation(const char* mediaType, transformation_type_t type) {
     }
 }
 
-void unregisterTransformation(const char* mediaType) {
+void unregisterTransformation(const uint8_t * mediaType) {
     int index = getTransformation(mediaType);
     if(index < 0){
         return;
@@ -371,16 +358,16 @@ void unregisterTransformation(const char* mediaType) {
     transformations[transformationCount--] = NULL;
 }
 
-int getTransformation(const char* mediaType){
+int getTransformation(const uint8_t * mediaType){
     for (int i = 0; i < transformationCount; ++i) {
-        if(strcmp(transformations[i]->mediaType, mediaType) == 0){
+        if(strcmp(transformations[i]->mediaType, (char*)mediaType) == 0){
             return i;
         }
     }
     return -1;
 }
 
-const char * getExe(const char* mediaType){
+const char * getExe(const uint8_t * mediaType){
     int index = getTransformation(mediaType);
 
     if(index < 0)
@@ -397,17 +384,18 @@ const char * getExe(const char* mediaType){
 
 }
 
-bool isActive(const char * mediaType){
+bool isActive(const uint8_t * mediaType){
     return getTransformation(mediaType) != -1;
 }
 
 transformation_t * listAll(int* count) {
     *count = transformationCount;
-    return transformations;
+    return *transformations;
 }
 
 
-unsigned init_transform(struct selector_key *key, bool chunked, size_t content_length) {
+unsigned
+init_transform(struct selector_key *key, bool chunked, size_t content_length) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
     int fds[] = { -1, -1, -1, -1};
 
@@ -415,7 +403,7 @@ unsigned init_transform(struct selector_key *key, bool chunked, size_t content_l
         R  = 0,
         W  = 1,
     };
-    int ret = 0;
+    unsigned ret = 0;
 
     int in [] = { -1, -1};
     int out[] = { -1, -1};
@@ -434,7 +422,9 @@ unsigned init_transform(struct selector_key *key, bool chunked, size_t content_l
         dup2(in [R], STDIN_FILENO);
         dup2(out[W], STDOUT_FILENO);
 
-        if(-1 == execv(getExe(o->response.mediaType), (char **) 0)) {
+        char *args[] = {NULL};
+
+        if(-1 == execv(getExe(o->response.mediaType), args)) {
             close(in [R]);
             close(out[W]);
             ret = 1;

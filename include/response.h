@@ -16,7 +16,7 @@
 #include "lib.h"
 
 struct response {
-    char* mediaType;
+    uint8_t * mediaType;
     int chunked;
     uint8_t * headers;
     int header_length;

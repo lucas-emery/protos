@@ -36,7 +36,8 @@ typedef enum {
     GET,
     POST,
     HEAD,
-    CONNECT
+    DELETE,
+    UNSUPPORTED
 } method_t;
 
 union socks_addr {

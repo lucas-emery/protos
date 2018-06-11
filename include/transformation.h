@@ -26,11 +26,11 @@ typedef struct {
 } transformation_t;
 
 transformation_t * listAll(int* count);
-int getTransformation(const char* mediaType);
-void registerTransformation(const char* mediaType, transformation_type_t type);
-void unregisterTransformation(const char* mediaType);
-const char * getExe(const char * mediaType);
-bool isActive(const char * mediaType);
+int getTransformation(const uint8_t * mediaType);
+void registerTransformation(const uint8_t * mediaType, transformation_type_t type);
+void unregisterTransformation(const uint8_t * mediaType);
+const char * getExe(const uint8_t * mediaType);
+bool isActive(const uint8_t * mediaType);
 unsigned init_transform(struct selector_key *key, bool chunked, size_t content_length);
 void transform_headers(struct response * response);
 
