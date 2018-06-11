@@ -26,10 +26,9 @@
 #define METRIC_SIZE 64
 #define METRIC '0'
 #define CONFIGURATION '1'
-#define METRIC_ERROR 2
-#define CONFIGURATION_ERROR 3
-#define MAX_BUFFER_SIZE 256
-#define MEDIATYPE_SIZE 20
+#define METRIC_ERROR '2'
+#define MAX_BUFFER_SIZE 1024
+#define MEDIATYPE_SIZE 1024
 
 
 typedef struct {

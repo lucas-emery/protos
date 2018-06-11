@@ -19,14 +19,12 @@ static unsigned sctp_request_read(struct selector_key *key) {
     bzero(d->read_buffer, MAX_BUFFER_SIZE);
     n = recv(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, 0);
     if(n > 0) {
-    	if(sctp_request_parser(d->read_buffer, d->write_buffer, n) > 0) {
+    	if(sctp_request_parser(d->read_buffer, d->write_buffer, n)) {
         	selector_set_interest_key(key, OP_WRITE);
         	return SCTP_WRITE;
         } else
             return SCTP_ERROR;
     } else {
-        printf("%ld\t%s\n", n, strerror(errno));
-    	perror("sctp_recvmsg()");
     	return SCTP_ERROR;
     }
 }
@@ -200,8 +198,8 @@ int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
                 type = read_buffer[read_pos++];
 				bzero(metric, METRIC_SIZE + 1);
 				if(get_metric((metric_t) type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
-					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
-					write_buffer[write_pos++] = type; //escribe que tipo de metrica
+				    write_buffer[write_pos++] = METRIC;
+					write_buffer[write_pos++] = type;
 					write_buffer[write_pos] = 0;
 					strcat((char*)write_buffer, (char*)metric);
                     write_pos += METRIC_SIZE;

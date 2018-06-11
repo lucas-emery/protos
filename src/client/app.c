@@ -2,11 +2,9 @@
 
 int main(int argc, char const *argv[]) {
 	int cantParams = argc-1;
-	int sock, in, i, ret, flags, pass = 0, passlen, port;
+	int sock, in, ret, port;
 	struct sockaddr_in servaddr;
-	struct sctp_status status;
-	struct sctp_sndrcvinfo sndrcvinfo;
-	char buffer[MAX_BUFFER], bufferAux[MAX_BUFFER], bufferRta[MAX_BUFFER], password[PASSWORD_SIZE + 1], a, ip[100];
+	char buffer[MAX_BUFFER], bufferAux[MAX_BUFFER], bufferRta[MAX_BUFFER], password[PASSWORD_SIZE + 1], ip[100];
 
 	bzero(bufferAux, MAX_BUFFER);
 	if(getParams(argc, argv, bufferAux, ip, &port) == 1) {
@@ -16,8 +14,6 @@ int main(int argc, char const *argv[]) {
 	printf("\n");
 	getPassword(password);
 	printf("\n");
-	//char * hashedPassword = hash(password);
-	//printf("%s\n", hashedPassword);
 
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
 	 
@@ -39,7 +35,6 @@ int main(int argc, char const *argv[]) {
 	strcat(buffer, bufferAux);
 	size_t datalen = strlen(buffer);
 	ret = send(sock, (void *) buffer, datalen, 0);
-	//printf("datalen: %lu\t%s\n",datalen, buffer);
 
 	if(ret < 0 )
 		DieWithSystemMessage("send() failed");
@@ -47,7 +42,6 @@ int main(int argc, char const *argv[]) {
     		DieWithUserMessage("send()", "sent unexpected number of bytes");
 	else
 	{
-		//printf("Succesfully sent %d bytes\n", ret);
 		bzero(bufferRta, MAX_BUFFER);
 		in = recv(sock, bufferRta, MAX_BUFFER, 0);
 		if( in < 0 )
@@ -67,11 +61,14 @@ int main(int argc, char const *argv[]) {
 int getParams(int cantParams, char const *params[], char buffer[], char * ip, int * port) {
 	int pos = 0;
 	int ip1, ip2, ip3, ip4;
+	int metrics[7] = {0};
+	int configurations[4] = {0};
+	char type;
 
 	if(sscanf(params[1], "%d.%d.%d.%d:%d", &ip1, &ip2, &ip3, &ip4, port) == 5) {
 		sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
 	} else {
-		printf("Error de parametro\n");
+		printf("Invalid argument\n");
 		return 1;
 	}
 
@@ -80,7 +77,8 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 			if(params[i][0] == '-') {
 				switch(params[i][1]) {
 					case 'm':
-						switch(params[i][2]) {
+						type = params[i][2];
+						switch(type) {
 							case '1':
 							case '2':
 							case '3':
@@ -88,54 +86,72 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 							case '5':
 							case '6':
 							case '7':
-								buffer[pos++] = '0';
-								buffer[pos++] = params[i][2];
+								if(!metrics[type-'0'-1]) {
+									buffer[pos++] = '0';
+									buffer[pos++] = type;
+									metrics[type-'0'-1] = 1;
+								} else {
+									printf("Repeated argument\n");
+									return 1;
+								}
 							break;
 							default:
-								printf("Error de parametro\n");
+								printf("Invalid argument\n");
 								return 1;
 						}
 					break;
 					case 'c':
-						switch(params[i][2]) {
+						type = params[i][2];
+						switch(type) {
 							case '0':
 							case '1':
 							case '2':
 							case '3':
 								if(i < cantParams-1) {
-									buffer[pos++] = '1';
-									buffer[pos++] = params[i][2];
 									i++;
 									if(isMediaType(params[i])) {
-										strcat(buffer, params[i]);
-										pos += strlen(params[i]);
-										buffer[pos++] = ' ';
+										if(!configurations[type-'0']) {
+											buffer[pos++] = '1';
+											buffer[pos++] = type;
+											buffer[pos] = 0;
+											if(pos + strlen(params[i]) >= MAX_BUFFER-PASSWORD_SIZE) {
+												printf("Media type is too long\n");
+												return 1;
+											}
+											strcat(buffer, params[i]);
+											pos += strlen(params[i]);
+											buffer[pos++] = ' ';
+											configurations[type-'0'] = 1;
+										} else {
+											printf("Repeated argument\n");
+											return 1;
+										}
 									} else {
-										printf("Error de media type\n");
+										printf("Invalid media type\n");
 										return 1;
 									}
 								} else {
-									printf("Error de parametro\n");
+									printf("Invalid argument\n");
 									return 1;
 								}
 							break;
 							default:
-								printf("Error de parametro\n");
+								printf("Invalid argument\n");
 								return 1;
 						}
 					break;
 					default:
-						printf("Error de parametro\n");
+						printf("Invalid argument\n");
 						return 1;
 				}
 			}
 			else {
-				printf("Error de parametro\n");
+				printf("Invalid argument\n");
 				return 1;
 			}
 		} 
 		else {
-			printf("Error de parametro\n");
+			printf("Invalid argument\n");
 			return 1;
 		}
 	}
@@ -184,15 +200,13 @@ void parseResponse(char * buffer, int requests) {
 			break;
 			case '1':
 				if(buffer[j] == '0') {
-					printf("Se han borrado todos filtros\n");
+					printf("Configurations reseted\n");
 				} else {
-					printf("Se ha aplicado el filtro %c\n", buffer[j++]);
+					printf("Configuration %c applied\n", buffer[j++]);
 				}	
 			break;
 			case '2':
-				printf("Error en la metrica %c\n", buffer[j++]);
-			break;
-
+				printf("Error in metric %c\n", buffer[j++]);
 			break;
 		}
 	}
@@ -203,18 +217,22 @@ void getPassword(char * password) {
 	char a;
 
 	while(!pass) {
-		printf("Introduzca la contraseña: ");
+		printf("Insert the password: ");
 		bzero(password, PASSWORD_SIZE + 1);
 		passlen = 0;
 		while((a = getchar()) != '\n') {
 			if(passlen >= PASSWORD_SIZE) {
-				printf("Max number of characters for password is %d\n", PASSWORD_SIZE);
+				printf("The number of characters for password is %d\n", PASSWORD_SIZE);
 				pass = 0;
 				while(getchar() != '\n');
 				break;
 			}
 			password[passlen++] = a;
 			pass = 1;
+		}
+		if(pass == 1 && passlen < PASSWORD_SIZE) {
+			printf("The number of characters for password is %d\n", PASSWORD_SIZE);
+			pass = 0;
 		}
 	}
 	password[passlen] = 0;
