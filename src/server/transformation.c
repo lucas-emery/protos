@@ -2,13 +2,17 @@
 #include <sys/socket.h>
 #include "transformation.h"
 #include <stm.h>
+#include <response.h>
 #include <selector.h>
-
 #include <metrics.h>
+#include <transformation.h>
+#include "origin.h"
 
 
 #define BLOCK 5
 #define EXE_COUNT 2
+#define MAX_STRING_LENGTH (sizeof(size_t)*2)+1
+
 transformation_t ** transformations;
 int transformationCount, size;
 
@@ -37,26 +41,6 @@ enum type{
 };
 
 typedef struct {
-    int origin_fd;
-    int client_fd;
-    int infd, outfd;
-    buffer buff;
-    struct response response;
-    struct response_parser parser;
-    bool readFirst;
-
-    buffer *rb , *wb, *tb;
-    bool * respDone, *reqDone, *transDone;
-    uint8_t  raw_data[BUFF_SIZE];
-
-    struct timeval time;
-
-    struct state_machine stm;
-} origin_t;
-
-#define ORIGIN_ATTACHMENT(key) ( (origin_t *)(key)->data)
-
-typedef struct {
     enum type type;
     int peer;
     char host[64];
@@ -76,7 +60,11 @@ typedef struct {
     struct state_machine stm;
     int client_fd;
 
+    bool chunked;
+    size_t content_length;
     bool * transDone;
+
+    uint8_t  raw_data[BUFF_SIZE];
 
     struct timeval time;
     bool timing;
@@ -103,7 +91,7 @@ static const struct state_definition transform_statbl[] = {
         {
                 .state            = COPY,
                 .on_write_ready   = copy_w,
-                .on_read_ready    = copy_r
+                .on_read_ready    = copy_r,
         },{
                 .state            = DONE,
         },{
@@ -141,7 +129,8 @@ transform_t * transform_new(int client_fd){
 }
 
 static void transform_done(struct selector_key *key){
-
+    selector_unregister_fd(key->s, key->fd);
+    close(key->fd);
 }
 
 static void transform_read(struct selector_key *key) {
@@ -169,76 +158,69 @@ const struct fd_handler transform_handler = {
         .handle_write  = transform_write,
 };
 
-char *substring(char *string, int position, int length)
-{
-    char *pointer;
-    int c;
+char * substring(char * string, int position, size_t length) {
+    char * sub;
 
-    pointer = malloc(length+1);
+    sub = malloc(length+1);
+    memcpy(sub, &string[position], length);
+    sub[length] = 0;
 
-    if( pointer == NULL )
-        exit(EXIT_FAILURE);
-
-    for( c = 0 ; c < length ; c++ )
-        *(pointer+c) = *((string+position-1)+c);
-
-    *(pointer+c) = '\0';
-
-    return pointer;
+    return sub;
 }
 
 void
-transform_headers(struct response response) {
-    if(response.body_length != 0) {
-        int j, header_length = response.header_length;
-        uint8_t *headers = response.headers;
-        char content[header_length];
-        int before, i;
-        bool found = false;
+transform_headers(struct response * response) {
+    int i, header_length = response->header_length;
+    char * headers = (char *)response->headers;
 
-        memcpy(content, strstr(headers, "Content-Length"), header_length);
+    char * cont_length_header = strstr(headers, "Content-Length");
 
-        for (j = 0; content[j] != '\r'; j++);
+    if(cont_length_header != NULL) {
+        for (i = 0; cont_length_header[i] != '\n' ; i++);
+        i++;
 
-        content[j] = 0;
+        memmove(cont_length_header, &cont_length_header[i], (size_t)header_length);
 
-        char *f, *e;
-        int length;
-
-        for (i = 0; headers[i] != '\n' ; i++);
-
-        length = strlen(headers);
-
-        f = substring(headers, 1, i - 1 );
-        e = substring(headers, i, length-i+1);
-
-        strcpy(headers, "");
-        strcat(headers, f);
-        free(f);
-        strcat(headers, "\r\nTransfer-Encoding: chunked");
-        strcat(headers, e);
-        free(e);
-
-        for (; before < header_length && !found; before++) {
-            char c = headers[before];
-            if(c == 'C') {
-                if(strncmp(headers + before, content, j) == 0)
-                    found = true;
-            }
-        }
-
-        before--;
-
-        memmove(headers + before - 2, headers + before + strlen(content) + 2, strlen(headers) - before - strlen(content));
+        char * end = strstr(headers, "\r\n\r\n");
+        char * chunked = "\r\nTransfer-Encoding: chunked\r\n\r\n";
+        size_t length = strlen(chunked);
+        memcpy(end, chunked, length);
+        response->header_length = (int)((void *)end - (void *)headers + length);
     }
+}
+
+size_t max_chunk_length(size_t size) {
+    size_t metadata_length = 5;     // \r\n\r\n
+    size_t aux = size;
+    do {
+        metadata_length++;
+        aux /= 16;
+    } while(aux != 0);
+    return size < metadata_length ? 0 : size - metadata_length;
+}
+
+char * size_to_hexstring(size_t size) {
+    char * buf;
+    size_t strlength = 1;
+    size_t aux = size;
+    do {
+        strlength++;
+        aux /= 16;
+    } while(aux != 0);
+
+    buf = malloc(strlength);
+    sprintf(buf, "%zx", size);
+    return buf;
 }
 
 static unsigned
 copy_r(struct selector_key *key) {
     transform_t * t = (transform_t*) key->data;
     buffer * b = t->b;
-    ssize_t n, min;
-    size_t size, body;
+    buffer * aux = t->aux;
+    ssize_t n;
+    size_t size, aux_size, min, length, max_length;
+    char * hexstring;
 
     if(t->timing) {
         logTime(TRANSFORMING,&t->time);
@@ -246,36 +228,73 @@ copy_r(struct selector_key *key) {
     }
 
     uint8_t * ptr = buffer_write_ptr(b, &size);
-    uint8_t * bodyPtr = buffer_read_ptr(t->aux, &body);
+    uint8_t * aux_ptr = buffer_write_ptr(aux, &aux_size);
 
-    min = size < body?size:body;
+    min = size < aux_size ? size : aux_size;
 
-    memcpy(ptr, bodyPtr, min);
-    buffer_write_adv(b, min);
-    buffer_read_adv(t->aux,min);
+    max_length = max_chunk_length(min);
 
-    ptr = buffer_write_ptr(b, &size);
-    n = read(key->fd, ptr, size);
-    if(n == 0)
-        *t->transDone = true;
+    n = read(key->fd, aux_ptr, max_length);
     if(n < 0) {
         return ERROR;
+    } else if(n == 0 && max_length != 0) {
+        *t->transDone = true;
     } else {
-        buffer_write_adv(b, n);
+        buffer_write_adv(aux, n);
     }
+
+    hexstring = size_to_hexstring((size_t)n);
+    length = strlen(hexstring);
+    memcpy(ptr, hexstring, length);
+    free(hexstring);
+    buffer_write_adv(b, length);
+
+    ptr = buffer_write_ptr(b, &size);
+    memcpy(ptr, "\r\n", 2);
+    buffer_write_adv(b, 2);
+
+    ptr = buffer_write_ptr(b, &size);
+    memcpy(ptr, aux_ptr, (size_t)n);
+    buffer_read_adv(aux, n);
+    buffer_write_adv(b, n);
+
+    ptr = buffer_write_ptr(b, &size);
+    memcpy(ptr, "\r\n", 2);
+    buffer_write_adv(b, 2);
+
+
     selector_add_interest(key->s,t->client_fd, OP_WRITE);
 
-    return COPY;
+    return *t->transDone ? DONE : COPY;
+}
+
+bool
+get_chunk_length(char * data, size_t size, size_t * length, size_t * offset) {
+    bool valid = false;
+    size_t i;
+    for (i = 0; i < size; i++) {
+        if(data[i] == '\n') {
+            valid = true;
+            break;
+        }
+    }
+
+    if(valid) {
+        *length = (size_t) strtol(data, NULL, 16);
+        *offset = i;
+    }
+    return valid;
 }
 
 static unsigned
 copy_w(struct selector_key *key) {
     transform_t * t = TRANSFORM_ATTACHMENT(key);
 
-    size_t size;
+    size_t size, min, length, offset;
     ssize_t n;
     buffer* b = t->b;
     uint8_t *ptr = buffer_read_ptr(b, &size);
+
     if(size == 0){
         selector_remove_interest(key->s, key->fd, OP_WRITE);
         return COPY;
@@ -286,11 +305,31 @@ copy_w(struct selector_key *key) {
         t->timing = true;
     }
 
-    n = write(key->fd, ptr, size);
+    if(t->chunked && t->content_length == 0) {
+        if(get_chunk_length(ptr, size, &length, &offset)) {
+            t->content_length = length;
+            buffer_read_adv(b, offset);
+            ptr = buffer_read_ptr(b, &size);
+
+            if(length == 0) {
+                return DONE;
+            }
+        } else {
+            return COPY;
+        }
+    }
+
+    min = size < t->content_length ? size : t->content_length;
+
+    n = write(key->fd, ptr, min);
     if(n == -1) {
         return ERROR;
     } else {
         buffer_read_adv(b, n);
+        t->content_length -= n;
+        if(!t->chunked && t->content_length == 0) {
+            return DONE;
+        }
     }
 
     return COPY;
@@ -368,7 +407,7 @@ transformation_t * listAll(int* count) {
 }
 
 
-unsigned init_transform(struct selector_key *key){
+unsigned init_transform(struct selector_key *key, bool chunked, size_t content_length) {
     origin_t * o = ORIGIN_ATTACHMENT(key);
     int fds[] = { -1, -1, -1, -1};
 
@@ -417,20 +456,32 @@ unsigned init_transform(struct selector_key *key){
     if(tIn == NULL || tOut == NULL)
         return ERROR;
 
-    tIn->aux = &o->buff;
-    tOut->aux = &o->buff;
-    tOut->b = o->rb;
 
     o->tb = malloc(sizeof(buffer));
     buffer_init(o->tb, BUFF_SIZE,o->raw_data);
 
     tIn->b = o->tb;
+    tOut->b = o->rb;
+
+    tIn->aux = &o->buff;
+    tOut->aux = malloc(sizeof(buffer));
+    buffer_init(tOut->aux, BUFF_SIZE, tOut->raw_data);
 
     o->infd = fds[2];
     o->outfd = fds[3];
 
     tIn->transDone = o->transDone;
     tOut->transDone = o->transDone;
+
+    tIn->chunked = chunked;
+    tOut->chunked = chunked;
+    if(chunked) {
+        tIn->content_length = 0;
+        tOut->content_length = 0;
+    } else {
+        tIn->content_length = content_length;
+        tOut->content_length = content_length;
+    }
 
     selector_register(key->s, o->infd, &transform_handler, OP_NOOP, tIn);
     selector_register(key->s, o->outfd, &transform_handler, OP_READ, tOut);

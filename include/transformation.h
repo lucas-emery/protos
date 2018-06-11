@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "lib.h"
 #include <stdbool.h>
+#include <selector.h>
 #include <response.h>
 
 #define TOUPPER_EXE "bin/toUpper/toUpper"
@@ -30,7 +31,8 @@ void registerTransformation(const char* mediaType, transformation_type_t type);
 void unregisterTransformation(const char* mediaType);
 const char * getExe(const char * mediaType);
 bool isActive(const char * mediaType);
-void transform_headers(struct response response);
+unsigned init_transform(struct selector_key *key, bool chunked, size_t content_length);
+void transform_headers(struct response * response);
 
 
 #endif

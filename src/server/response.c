@@ -52,7 +52,7 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
 
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
-       p->response->header_length++;
+       p->response->headers[p->response->header_length++] = c;
        st = response_parser_feed(p, c);
        if(response_is_done(st, errored)) {
           break;
@@ -73,6 +73,7 @@ response_parser_init (struct response_parser *p) {
     memset(p->response, 0, sizeof(*(p->response)));
     p->response->mediaType = malloc(BUFF_SIZE);
     p->response->chunked = FALSE;
+    p->response->headers = malloc(BUFF_SIZE);
     p->response->header_length = 0;
     p->response->body_length = 0;
     p->buffer = malloc(BUFF_SIZE);
