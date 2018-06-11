@@ -4,6 +4,7 @@
 #include "stm.h"
 #include "netutils.h"
 #include "selector.h"
+#include "transformation.h"
 #include <stdio.h>
 #include <stdlib.h>  // malloc
 #include <string.h>  // memset

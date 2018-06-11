@@ -4,7 +4,7 @@
 #define CLIENT_ATTACHMENT(key) ( (sctp_client_t *)(key)->data)
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
-static char password[] = "holapete";
+static char password[] = "tpprotos";
 
 static void sctp_request_init(const unsigned state, struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
@@ -48,7 +48,7 @@ static unsigned sctp_request_write(struct selector_key *key) {
         return SCTP_ERROR;
     }
 
-    selector_set_interest_key(key, OP_READ);
+    selector_set_interest_key(key, OP_NOOP);
     return SCTP_DONE;
 }
 
@@ -204,8 +204,6 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
 			case METRIC:
                 type = read_buffer[read_pos++];
 				bzero(metric, METRIC_SIZE + 1);
-				//getMetric(type, metric);
-
 				if(get_metric(type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
 					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
 					write_buffer[write_pos++] = type; //escribe que tipo de metrica					
@@ -226,35 +224,16 @@ int sctp_request_parser(char * read_buffer, char * write_buffer, int n) {
                 }
                 mediaType[i] = 0;
                 read_pos++;
-				if(applyFilter(type, mediaType)) {
-					write_buffer[write_pos++] = CONFIGURATION; //escribe que es una configuracion
-					write_buffer[write_pos++] = type; //escribe que tipo de configuracion
-				}
-				else {
-					write_buffer[write_pos++] = CONFIGURATION_ERROR;
-					write_buffer[write_pos++] = type;
-				}
+				write_buffer[write_pos++] = CONFIGURATION; //escribe que es una configuracion
+				write_buffer[write_pos++] = type; //escribe que tipo de configuracion
+                if(type == '0') {
+                    unregisterTransformation(mediaType);
+                } else {
+				    registerTransformation(mediaType, type-'0'-1);
+                }
 			break;
 		}
 	}
 
 	return 1;
-}
-
-void getMetric(char type, char * metric) {
-  switch(type) {
-    case '1':
-      strcpy(metric, "0010");
-    break;
-    case '2':
-      strcpy(metric, "0020");
-    break;
-    case '3':
-      strcpy(metric, "0030");
-    break;
-  }
-}
-
-int applyFilter(char type, char * mediaType) {
-  return 1;
 }
