@@ -1,4 +1,5 @@
 #include "response.h"
+#include "utils.h"
 
 static enum response_state
 version(const uint8_t c, struct response_parser* p);
@@ -53,7 +54,7 @@ response_consume(buffer *b, struct response_parser *p, bool *errored) {
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
        p->response->headers[p->response->header_length++] = c;
-       st = response_parser_feed(p, c);
+       st = response_parser_feed(p, to_lower(c));
        if(response_is_done(st, errored)) {
           break;
        }
@@ -165,7 +166,7 @@ enter(const uint8_t c, struct response_parser* p) {
             p->buffer[p->i++] = c;
         break;
         default:
-            if(c == 'T' || c == 'C') {
+            if(c == 't' || c == 'c') {
                 response_reset_buffer(p);
                 p->buffer[p->i++] = c;
                 next = response_desired_header;
@@ -185,11 +186,11 @@ desiredHeader(const uint8_t c, struct response_parser* p) {
     if(c == ':') {
         p->buffer[p->i] = 0;
 
-        if(strcmp(p->buffer, "Content-Length") == 0)
+        if(strcmp(p->buffer, "content-length") == 0)
             next = response_length;
-        else if(strcmp(p->buffer, "Content-Type") == 0)
+        else if(strcmp(p->buffer, "content-type") == 0)
             next = response_media_type;
-        else if(strcmp(p->buffer, "Transfer-Encoding") == 0)
+        else if(strcmp(p->buffer, "transfer-encoding") == 0)
             next = response_encoding;
         else
             next = response_headers;

@@ -1,5 +1,6 @@
 #include "request.h"
 #include <errno.h>
+#include "utils.h"
 
 static enum request_state
 method(const uint8_t c, struct request_parser* p);
@@ -43,7 +44,11 @@ request_consume(buffer *b, struct request_parser *p, bool *errored) {
     while(buffer_can_read(b)) {
        const uint8_t c = buffer_read(b);
        p->request->headers[p->request->headers_length++] = c;
-       st = request_parser_feed(p, c);
+       if(st == request_method) {
+           st = request_parser_feed(p, c);
+       } else {
+           st = request_parser_feed(p, to_lower(c));
+       }
        if(request_is_done(p, st, errored)) {
           break;
        }
@@ -160,7 +165,7 @@ enter(const uint8_t c, struct request_parser* p) {
         break;
         default:
             request_reset_buffer(p);
-            if(c == 'H' || c == 'C') {
+            if(c == 'h' || c == 'c') {
                 p->buffer[p->i++] = c;
                 return request_desired_header;
             }
@@ -177,9 +182,9 @@ desiredHeader(const uint8_t c, struct request_parser* p) {
     if(c == ':') {
         p->buffer[p->i] = 0;
 
-        if(strcmp(p->buffer, "Host") == 0)
+        if(strcmp(p->buffer, "host") == 0)
             next = request_host;
-        else if(strcmp(p->buffer, "Content-Length") == 0) {
+        else if(strcmp(p->buffer, "content-length") == 0) {
             next = request_content_length;
             request_reset_buffer(p);
         } else

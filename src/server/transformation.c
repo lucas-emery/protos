@@ -7,6 +7,7 @@
 #include <metrics.h>
 #include <transformation.h>
 #include "origin.h"
+#include "utils.h"
 
 
 #define BLOCK 5
@@ -162,7 +163,7 @@ transform_headers(struct response * response) {
     int i, header_length = response->header_length;
     char * headers = (char *)response->headers;
 
-    char * cont_length_header = strstr(headers, "Content-Length");
+    char * cont_length_header = strcasestr(headers, "Content-Length");
 
     if(cont_length_header != NULL) {
         for (i = 0; cont_length_header[i] != '\n' ; i++);

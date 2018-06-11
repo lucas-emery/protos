@@ -201,7 +201,8 @@ int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 				bzero(metric, METRIC_SIZE + 1);
 				if(get_metric((metric_t) type-'0'-1, metric, METRIC_SIZE + 1)>= 0) {
 					write_buffer[write_pos++] = METRIC; //escribe que es una metrica
-					write_buffer[write_pos++] = type; //escribe que tipo de metrica					
+					write_buffer[write_pos++] = type; //escribe que tipo de metrica
+					write_buffer[write_pos] = 0;
 					strcat((char*)write_buffer, (char*)metric);
                     write_pos += METRIC_SIZE;
 				}

@@ -40,6 +40,7 @@ bool send_http_code(unsigned code, struct selector_key * key) {
                 selector_set_interest_key(key, OP_WRITE);
                 *c->reqDone = true;
                 *c->respDone = true;
+                *c->transDone = true;
             } else {
                 selector_add_interest_key(key, OP_WRITE);
             }

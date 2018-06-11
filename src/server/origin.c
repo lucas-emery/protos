@@ -439,7 +439,7 @@ copy_w(struct selector_key *key) {
     ssize_t n;
     buffer* b = o->wb;
     uint8_t *ptr = buffer_read_ptr(b, &size);
-    if(size == 0){
+    if(size == 0) {
         selector_remove_interest(key->s, key->fd, OP_WRITE);
         return COPY;
     }
