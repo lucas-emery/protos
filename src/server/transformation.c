@@ -24,6 +24,9 @@ static exe_t exe_array[] = {
         },{
             .type   = ECHO,
             .exec   = ECHO_EXE,
+        },{
+            .type   = ECHODEBUG,
+            .exec   = ECHODEBUG_EXE
         }
 };
 

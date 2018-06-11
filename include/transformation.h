@@ -8,12 +8,14 @@
 #include <stdbool.h>
 #include <response.h>
 
-#define TOUPPER_EXE "bin/toUpper"
-#define ECHO_EXE "bin/echo"
+#define TOUPPER_EXE "bin/toUpper/toUpper"
+#define ECHO_EXE "bin/echo/echo"
+#define ECHODEBUG_EXE "bin/echoDebug/echoDebug"
 
 typedef enum transformation_type {
     TOUPPER,
-    ECHO
+    ECHO,
+    ECHODEBUG
 } transformation_type_t;
 
 typedef struct {
