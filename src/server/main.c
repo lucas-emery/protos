@@ -11,6 +11,9 @@
 #include <netinet/tcp.h>
 #include <netinet/sctp.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <ifaddrs.h>
 
 #include "selector.h"
 #include "passive.h"
@@ -19,6 +22,7 @@
 #include "sctpRequest.h"
 #include "message.h"
 #include "log.h"
+#include "resolveLocalIp.h"
 
 #include "transformation.h"
 
@@ -47,6 +51,7 @@ typedef struct {
 } table_entry_t;
 
 table_entry_t table[1024];
+
 
 void * print_table(){
     while(1){
@@ -98,6 +103,8 @@ static void sigterm_handler(const int signal){
 //}
 
 int main(const int argc, const char **argv){
+    local_ip_resolv(PORT);
+
     close(0);
 
     selector_status ss = SELECTOR_SUCCESS;

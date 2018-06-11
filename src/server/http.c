@@ -4,6 +4,7 @@
 #include "http.h"
 
 static const char* HTTP_405 = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
+static const char* HTTP_409 = "HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\n\r\n";
 
 bool send_http_code(unsigned code, struct selector_key * key) {
 
@@ -19,6 +20,10 @@ bool send_http_code(unsigned code, struct selector_key * key) {
     switch (code) {
         case 405:
             message = HTTP_405;
+            lastResponse = true;
+            break;
+        case 409:
+            message = HTTP_409;
             lastResponse = true;
             break;
         default:

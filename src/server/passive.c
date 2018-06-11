@@ -6,11 +6,15 @@
 #include <time.h>
 #include <unistd.h>  // close
 #include <pthread.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <ifaddrs.h>
 
 #include <arpa/inet.h>
 #include <http.h>
 #include <passive.h>
 
+#include "resolveLocalIp.h"
 #include "request.h"
 #include "buffer.h"
 #include "log.h"
@@ -19,8 +23,11 @@
 #include "netutils.h"
 #include "response.h"
 #include "metrics.h"
+#include "message.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
+
+
 
 
 struct timeval sysTime;
@@ -424,6 +431,8 @@ request_resolv(struct selector_key * key, request_st * d) {
     return COPY;
 }
 
+
+
 static unsigned
 request_resolv_done(struct selector_key *key) {
     request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
@@ -444,6 +453,10 @@ request_resolv_done(struct selector_key *key) {
     //TODO use status to mark connection errors and report to client
 
     logTime(DNS, &CLIENT_ATTACHMENT(key)->time);
+
+
+    if(check_local_ip(&s->origin_addr))
+        return send_http_code(409, key) ? COPY : ERROR;
 
     request_connect(key, d);
     return COPY;
