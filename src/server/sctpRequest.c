@@ -19,11 +19,9 @@ static unsigned sctp_request_read(struct selector_key *key) {
     bzero(d->read_buffer, MAX_BUFFER_SIZE);
     n = recv(key->fd, (void *) d->read_buffer, (size_t) MAX_BUFFER_SIZE, 0);
     if(n > 0) {
-    	if(sctp_request_parser(d->read_buffer, d->write_buffer, n)) {
-        	selector_set_interest_key(key, OP_WRITE);
-        	return SCTP_WRITE;
-        } else
-            return SCTP_ERROR;
+    	sctp_request_parser(d->read_buffer, d->write_buffer, n);
+        selector_set_interest_key(key, OP_WRITE);
+    	return SCTP_WRITE;
     } else {
     	return SCTP_ERROR;
     }
@@ -181,13 +179,14 @@ fail:
     sctp_client_destroy(state);
 }
 
-int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
+void sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 	int i, read_pos = 0, write_pos = 0;
 	uint8_t metric[METRIC_SIZE + 1], type, mediaType[MEDIATYPE_SIZE];
 	
 	for(i=0; i<strlen(password); i++) {
 		if(password[i] != read_buffer[read_pos++]) {
-			return 0;
+		    write_buffer[write_pos] = PASSWORD;
+            return;
 		}
 	}
 
@@ -228,6 +227,4 @@ int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 			break;
 		}
 	}
-
-	return 1;
 }

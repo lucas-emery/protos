@@ -27,6 +27,7 @@
 #define METRIC '0'
 #define CONFIGURATION '1'
 #define METRIC_ERROR '2'
+#define PASSWORD '3'
 #define MAX_BUFFER_SIZE 1024
 #define MEDIATYPE_SIZE 1024
 
@@ -61,9 +62,7 @@ typedef enum {
 	SCTP_ERROR
 } sctp_sock_state_t;
 
-int sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n);
-void getMetric(char type, char * metric);
-int applyFilter(char type, char * mediaType);
+void sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n);
 void sctp_socks_accept(struct selector_key *key);
 
 #endif

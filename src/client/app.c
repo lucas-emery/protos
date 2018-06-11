@@ -2,7 +2,8 @@
 
 int main(int argc, char const *argv[]) {
 	int cantParams = argc-1;
-	int sock, in, ret, port;
+	int sock, port;
+	ssize_t in, ret;
 	struct sockaddr_in servaddr;
 	char buffer[MAX_BUFFER], bufferAux[MAX_BUFFER], bufferRta[MAX_BUFFER], password[PASSWORD_SIZE + 1], ip[100];
 
@@ -44,14 +45,13 @@ int main(int argc, char const *argv[]) {
 	{
 		bzero(bufferRta, MAX_BUFFER);
 		in = recv(sock, bufferRta, MAX_BUFFER, 0);
-		if( in < 0 )
-	        	DieWithSystemMessage("recv() failed");
-	    	else if (in == 0)
-      			DieWithUserMessage("recv()", "connection closed prematurely");
-	    	else 
-    		{
-    			parseResponse(bufferRta, cantParams);
-    		}
+		if(in < 0) {
+			DieWithSystemMessage("recv() failed");
+		} else if(in == 0) {
+			DieWithUserMessage("recv()", "connection closed prematurely");
+		} else {
+    			parseResponse(bufferRta, in);
+		}
 	}
 
 	close (sock);
@@ -160,7 +160,7 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 
 int isMediaType(const char * param) {
 	int j = 0;
-	int len = strlen(param);
+	size_t len = strlen(param);
 	char c;
 	while(j < len) {
 		c = param[j];
@@ -188,19 +188,26 @@ int isMediaType(const char * param) {
 	return 1;
 }
 
-void parseResponse(char * buffer, int requests) {
+void parseResponse(char * buffer, size_t n) {
 	int j = 0;
-	for(int i=0; i<requests; i++) {
+	//printf("%s\n", buffer);
+	while(j < n) {
 		switch(buffer[j++]) {
 			case '0':
 				j++;
-				for(int k=0; k<METRIC_SIZE; k++) //4 es la cant de bytes de una metricResponse
-					printf("%c", buffer[j++]);
-				printf("\n");
+				if(j + METRIC_SIZE <= n) {
+					for (int k = 0; k < METRIC_SIZE; k++) {
+						printf("%c", buffer[j++]);
+					}
+					printf("\n");
+				} else {
+					j += METRIC_SIZE;
+				}
 			break;
 			case '1':
 				if(buffer[j] == '0') {
 					printf("Configurations reseted\n");
+					j++;
 				} else {
 					printf("Configuration %c applied\n", buffer[j++]);
 				}	
@@ -208,12 +215,15 @@ void parseResponse(char * buffer, int requests) {
 			case '2':
 				printf("Error in metric %c\n", buffer[j++]);
 			break;
+		    case '3':
+		        printf("Incorrect password\n");
+		    break;
 		}
 	}
 }
 
 void getPassword(char * password) {
-	int pass = 0, passlen;
+	int pass = 0, passlen = 0;
 	char a;
 
 	while(!pass) {
@@ -251,19 +261,4 @@ void DieWithUserMessage(const char *msg, const char *detail) {
 void DieWithSystemMessage(const char *msg) {
   perror(msg);
   exit(1);
-}
-
-char * hash(unsigned char *str)
-{
-    unsigned long hash = 5381;
-    int c;
-
-    while (c = *str++)
-        hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-
-    int n = snprintf(NULL, 0, "%lu", hash);
-	char * buf = malloc(n + 1);
-	snprintf(buf, n+1, "%lu", hash);
-
-    return buf;
 }
