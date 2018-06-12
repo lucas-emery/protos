@@ -11,6 +11,7 @@
 #include <transformation.h>
 #include <passive.h>
 #include <origin.h>
+#include <http.h>
 
 #include "request.h"
 #include "passive.h"
@@ -222,7 +223,7 @@ static void clear_interests(const unsigned state, struct selector_key *key) {
 
 static unsigned connected(struct selector_key *key){
     int error = 0;
-    socklen_t len = 0;
+    socklen_t len = sizeof(error);
 
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
@@ -230,7 +231,13 @@ static unsigned connected(struct selector_key *key){
             return COPY;
         }
     }
-    //TODO Report error to client instead of just closing the connection (aca o en origin_done?)
+
+    if (error == ETIMEDOUT){
+        send_http_code_from_origin(504, key);
+    } else {
+        send_http_code_from_origin(502, key);
+    }
+
     return RESPONSE_ERROR;
 }
 

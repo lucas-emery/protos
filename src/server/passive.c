@@ -366,7 +366,7 @@ request_read(struct selector_key *key) {
             register_request(c->client_fd, d->request.headers);
             if(d->parser.request->method == UNSUPPORTED) {
                 register_status_code(c->client_fd, 405);
-                return send_http_code(405, key) ? COPY : ERROR;
+                return send_http_code_from_client(405, key) ? COPY : ERROR;
             } else {
                 strcpy(table[key->fd].host, d->request.host);
                 buffer_read_ptr(aux, &auxCount);
@@ -447,8 +447,9 @@ request_resolv_done(struct selector_key *key) {
     client_t *s      =  CLIENT_ATTACHMENT(key);
 
     if(s->origin_resolution == 0) {
-        d->status = status_general_SOCKS_server_failure;
+        d->status = status_host_unreachable;
     } else {
+        d->status = status_succeeded;
         s->origin_domain   = s->origin_resolution->ai_family;
         s->origin_addr_len = s->origin_resolution->ai_addrlen;
         memcpy(&s->origin_addr,
@@ -458,15 +459,19 @@ request_resolv_done(struct selector_key *key) {
         s->origin_resolution = 0;
     }
 
-    //TODO use status to mark connection errors and report to client
-
     logTime(DNS, &CLIENT_ATTACHMENT(key)->time);
 
+    if(d->status != status_succeeded)
+        return send_http_code_from_client(502, key) ? COPY : ERROR;
 
     if(check_local_ip(&s->origin_addr))
-        return send_http_code(409, key) ? COPY : ERROR;
+        return send_http_code_from_client(409, key) ? COPY : ERROR;
 
     request_connect(key, d);
+
+    if(d->status != status_succeeded)
+        return send_http_code_from_client(502, key) ? COPY : ERROR;
+
     return COPY;
 }
 
