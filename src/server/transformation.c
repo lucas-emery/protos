@@ -11,26 +11,37 @@
 
 
 #define BLOCK 5
-#define EXE_COUNT 2
+#define EXE_COUNT 4
 
 transformation_t ** transformations;
 int transformationCount, size;
 
+char *leetArgv[] = {"sed", "-e", "s/a/4/g", "-e", "s/e/3/g", "-e", "s/i/1/g", "-e", "s/o/0/g", "-e", "s/5/-/g", NULL};
+
+
 typedef struct {
     transformation_type_t type;
     char * exec;
+    char ** params;
 } exe_t;
 
 static exe_t exe_array[] = {
         {
             .type   = TOUPPER,
             .exec   = TOUPPER_EXE,
+            .params = NULL,
         },{
             .type   = ECHO,
             .exec   = ECHO_EXE,
+            .params = NULL,
         },{
             .type   = ECHODEBUG,
-            .exec   = ECHODEBUG_EXE
+            .exec   = ECHODEBUG_EXE,
+            .params = NULL,
+        },{
+            .type   = LEET,
+            .exec   = LEET_EXE,
+            .params = leetArgv,
         }
 };
 
@@ -395,7 +406,22 @@ const char * get_exe(const uint8_t *mediaType){
     }
 
     return NULL;
+}
 
+char ** get_args(const uint8_t *mediaType){
+    int index = get_transformation(mediaType);
+
+    if(index < 0)
+        return NULL;
+
+    transformation_type_t type = transformations[index]->type;
+
+    for (int i = 0; i < EXE_COUNT; ++i) {
+        if(type == exe_array[i].type)
+            return exe_array[i].params;
+    }
+
+    return NULL;
 }
 
 bool is_active(const uint8_t *mediaType){
@@ -447,7 +473,7 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
 
         char *args[] = {NULL};
 
-        if(-1 == execv(get_exe(o->response.mediaType), args)) {
+        if(-1 == execvp(get_exe(o->response.mediaType), get_args(o->response.mediaType))) {
             close(in [R]);
             close(out[W]);
             ret = 1;

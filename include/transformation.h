@@ -12,11 +12,13 @@
 #define TOUPPER_EXE "bin/toUpper/toUpper"
 #define ECHO_EXE "bin/echo/echo"
 #define ECHODEBUG_EXE "bin/echoDebug/echoDebug"
+#define LEET_EXE "sed"
 
 typedef enum transformation_type {
     TOUPPER,
     ECHO,
-    ECHODEBUG
+    ECHODEBUG,
+    LEET,
 } transformation_type_t;
 
 typedef struct {
@@ -26,6 +28,7 @@ typedef struct {
 } transformation_t;
 
 transformation_t * listAll(int* count);
+char ** get_args(const uint8_t *mediaType);
 int get_transformation(const uint8_t *mediaType);
 void register_transformation(const uint8_t *mediaType, transformation_type_t type);
 void unregister_transformation(const uint8_t *mediaType);

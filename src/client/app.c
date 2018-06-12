@@ -107,6 +107,7 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 							case '1':
 							case '2':
 							case '3':
+							case '4':
 								if(i < cantParams-1) {
 									i++;
 									if(isMediaType(params[i])) {
