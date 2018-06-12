@@ -103,6 +103,7 @@ selector_close(void) {
 // estructuras internas
 struct item {
    int                 fd;
+   struct timeval     last_used;
    fd_interest         interest;
    const fd_handler   *handler;
    void *              data;
@@ -361,6 +362,8 @@ selector_register(fd_selector        s,
         item->handler  = handler;
         item->interest = interest;
         item->data     = data;
+        gettimeofday(&item->last_used, NULL);
+
 
         // actualizo colaterales
         if(fd > s->max_fd) {
@@ -515,13 +518,24 @@ handle_iteration(fd_selector s) {
     struct selector_key key = {
         .s = s,
     };
+    struct timeval now;
+    gettimeofday(&now, NULL);
 
     for (int i = 0; i <= n; i++) {
         struct item *item = s->fds + i;
+
         if(ITEM_USED(item)) {
+            
+            if(now.tv_sec - item->last_used.tv_sec >= 30){
+                if(item->handler->handle_timeout != NULL)
+                    item->handler->handle_timeout(item);
+            }
+
             key.fd   = item->fd;
             key.data = item->data;
             if(FD_ISSET(item->fd, &s->slave_r)) {
+
+                gettimeofday(&item->last_used, NULL);
                 if(OP_READ & item->interest) {
                     if(0 == item->handler->handle_read) {
                         assert(("OP_READ arrived but no handler. bug!" == 0));
@@ -531,6 +545,8 @@ handle_iteration(fd_selector s) {
                 }
             }
             if(FD_ISSET(i, &s->slave_w)) {
+
+                gettimeofday(&item->last_used, NULL);
                 if(OP_WRITE & item->interest) {
                     if(0 == item->handler->handle_write) {
                         assert(("OP_WRITE arrived but no handler. bug!" == 0));

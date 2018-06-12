@@ -133,6 +133,7 @@ typedef struct fd_handler {
    * Seguramente deba liberar los recusos alocados en data.
    */
   void (*handle_close)     (struct selector_key *key);
+  void (*handle_timeout)     (struct selector_key *key);
 
 } fd_handler;
 

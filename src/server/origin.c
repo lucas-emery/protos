@@ -210,11 +210,16 @@ static void origin_close(struct selector_key *key) {
     origin_destroy(ORIGIN_ATTACHMENT(key));
 }
 
+static void origin_timeout(struct selector_key *key){
+    send_http_code_from_origin(504, key);
+}
+
 static const struct fd_handler origin_handler = {
     .handle_read   = origin_read,
     .handle_write  = origin_write,
     .handle_close  = origin_close,
     .handle_block  = origin_block,
+    .handle_timeout= origin_timeout,
 };
 
 static void clear_interests(const unsigned state, struct selector_key *key) {

@@ -214,11 +214,13 @@ static void client_read(struct selector_key *key);
 static void client_write(struct selector_key *key);
 static void client_block(struct selector_key *key);
 static void client_close(struct selector_key *key);
+static void client_timeout(struct selector_key *key);
 static const struct fd_handler client_handler = {
     .handle_read   = client_read,
     .handle_write  = client_write,
     .handle_close  = client_close,
     .handle_block  = client_block,
+    .handle_timeout= client_timeout,
 };
 
 
@@ -296,6 +298,10 @@ static void client_block(struct selector_key *key) {
 
 static void client_close(struct selector_key *key) {
     client_destroy(CLIENT_ATTACHMENT(key));
+}
+
+static void client_timeout(struct selector_key *key){
+
 }
 
 static void client_done(struct selector_key* key) {
