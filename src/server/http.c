@@ -6,6 +6,7 @@
 
 static const char* HTTP_405 = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
 static const char* HTTP_409 = "HTTP/1.1 409 Conflict\r\nContent-Length: 0\r\n\r\n";
+static const char* HTTP_500 = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n";
 static const char* HTTP_502 = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
 static const char* HTTP_504 = "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n";
 static const char* HTTP_505 = "HTTP/1.1 505 HTTP Version Not Supported\r\nContent-Length: 0\r\n\r\n";

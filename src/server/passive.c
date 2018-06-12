@@ -117,6 +117,7 @@ static const struct state_definition client_statbl[] = {
         .state            = REQUEST_HEADERS,
         .on_arrival       = request_init,
         .on_read_ready    = request_read,
+        .on_write_ready   = copy_w,
     },{
 //        .state            = REQUEST_RESOLV,
 //        .on_block_ready   = request_resolv_done,
@@ -555,7 +556,7 @@ copy_w(struct selector_key *key) {
             logTime(RESPONSE, &c->time);
             return DONE;
         } else {
-            return COPY;
+            return c->stm.current->state;
         }
     }
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
@@ -567,6 +568,6 @@ copy_w(struct selector_key *key) {
 
     logTime(RESPONSE, &c->time);
 
-    return COPY;
+    return c->stm.current->state;
 }
 

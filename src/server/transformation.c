@@ -140,8 +140,6 @@ transform_t * transform_new(int client_fd){
 }
 
 static void transform_done(struct selector_key *key){
-    selector_unregister_fd(key->s, key->fd);
-    close(key->fd);
 }
 
 static void transform_read(struct selector_key *key) {
@@ -164,9 +162,21 @@ static void transform_write(struct selector_key *key) {
     }
 }
 
+static void transform_close(struct selector_key *key) {
+    transform_t * t = TRANSFORM_ATTACHMENT(key);
+
+    if(t->client_fd == -1) {
+        free(t->b);
+    } else {
+        free(t->aux);
+    }
+    free(t);
+}
+
 const struct fd_handler transform_handler = {
         .handle_read   = transform_read,
         .handle_write  = transform_write,
+        .handle_close  = transform_close,
 };
 
 void
@@ -242,6 +252,7 @@ copy_r(struct selector_key *key) {
 
     n = read(key->fd, aux_ptr, (size_t)max_length);
     if(n < 0) {
+        *t->transDone = true;
         return ERROR;
     } else if(n == 0 && max_length != 0) {
         *t->transDone = true;
@@ -331,6 +342,7 @@ copy_w(struct selector_key *key) {
 
     n = write(key->fd, ptr, min);
     if(n == -1) {
+        *t->transDone = true;
         return ERROR;
     } else {
         buffer_read_adv(b, n);
@@ -492,7 +504,7 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
         fds[3] = out[R];
     }
 
-    transform_t * tIn = transform_new(o->client_fd);
+    transform_t * tIn = transform_new(-1);
     transform_t * tOut = transform_new(o->client_fd);
 
     if(tIn == NULL || tOut == NULL)

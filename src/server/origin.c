@@ -150,6 +150,19 @@ static void origin_done(struct selector_key* key) {
 
 static void origin_destroy(origin_t* o){
     if(o != NULL) {
+        const int fds[] = {
+                o->infd,
+                o->outfd,
+        };
+        for(unsigned i = 0; i < N(fds); i++) {
+            if(fds[i] != -1) {
+                if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
+                    abort();
+                }
+                close(fds[i]);
+            }
+        }
+
         size_t size;
         response_close(&o->parser);
         free(o->response.headers);
