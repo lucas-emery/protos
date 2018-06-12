@@ -174,12 +174,11 @@ int main(const int argc, const char **argv){
         serv_addr4.sin_family = AF_INET;
         serv_addr4.sin_port = htons(PORT);   // Local port
 
-        if(argv[1] == NULL)
+        if(ip_tcp[0] == 0)
             serv_addr4.sin_addr.s_addr = htonl(INADDR_ANY);
         else {
-            if(inet_pton(AF_INET, argv[1], &serv_addr4.sin_addr) < 0) {
+            if(inet_pton(AF_INET, ip_tcp, &serv_addr4.sin_addr) < 0)
                 DieWithUserMessage("ded", "Incorrect ip");
-            }
         }
 
         mSocket =  socket(AF_INET, SOCK_STREAM, 0);
@@ -189,12 +188,11 @@ int main(const int argc, const char **argv){
         serv_addr6.sin6_family = AF_INET6;        // IPv6 address family
         serv_addr6.sin6_port = htons(PORT);   // Local port
 
-        if(argv[1] == NULL)
+        if(ip_tcp[0] == 0)
             serv_addr6.sin6_addr = in6addr_any;
         else {
-            if (inet_pton(AF_INET6, argv[1], &serv_addr6.sin6_addr) < 0) {
+            if (inet_pton(AF_INET6, ip_tcp, &serv_addr6.sin6_addr) < 0)
                 DieWithUserMessage("ded", "Incorrect ip");
-            }
         }
 
         mSocket =  socket(AF_INET6, SOCK_STREAM, 0);

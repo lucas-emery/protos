@@ -165,7 +165,7 @@ static void origin_done(struct selector_key* key) {
 
 static void origin_destroy(origin_t* o){
     if(o != NULL) {
-        ssize_t size;
+        size_t size;
         response_close(&o->parser);
         free(o->response.headers);
         free(o->response.mediaType);

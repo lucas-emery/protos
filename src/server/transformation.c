@@ -347,7 +347,7 @@ void register_transformation(const uint8_t *mediaType, transformation_type_t typ
     int index = get_transformation(mediaType);
     if(index < 0){
         transformation_t * new = calloc(1, sizeof(transformation_t));
-        new->mediaType = calloc(1, strlen(mediaType));
+        new->mediaType = calloc(1, strlen((char*)mediaType));
         strcpy(new->mediaType, (char*)mediaType);
         new->type = type;
 
@@ -475,8 +475,6 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
         in [W] = out[R] = -1;
         dup2(in [R], STDIN_FILENO);
         dup2(out[W], STDOUT_FILENO);
-
-        char *args[] = {NULL};
 
         if(-1 == execvp(get_exe(o->response.mediaType), get_args(o->response.mediaType))) {
             close(in [R]);

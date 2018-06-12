@@ -27,9 +27,6 @@
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
 
-
-
-
 struct timeval sysTime;
 
 enum type{
@@ -429,7 +426,7 @@ request_resolv_blocking(void *data) {
     if(s->client.request.request.dest_port == 0) {
         buff = "http";
     } else
-        snprintf(buff, sizeof(buff), "%d", s->client.request.request.dest_port);
+        snprintf(buff, 8, "%d", s->client.request.request.dest_port);
 
     getaddrinfo(s->client.request.request.host, buff, &hints, &s->origin_resolution);
     selector_notify_block(key->s, key->fd);
@@ -499,8 +496,7 @@ request_resolv_done(struct selector_key *key) {
 }
 
 static void
-request_read_done(struct selector_key *key) {
-    request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
+request_read_done(struct selector_key *key) {\
     client_t *c      =  CLIENT_ATTACHMENT(key);
     *c->reqDone = true;
 }
