@@ -111,14 +111,36 @@ int main(const int argc, const char **argv){
 
     selector_status ss = SELECTOR_SUCCESS;
     fd_selector selector = NULL;
+    int mSocket;
+    struct sockaddr_in serv_addr4;
+    struct sockaddr_in6 serv_addr6;
+    bool is_ipv4 = false;
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    addr.sin_port = htons(PORT);
+    char buff[INET_ADDRSTRLEN];
+    if(inet_pton(AF_INET, argv[1], buff) > 0) { //is ipv4
+        is_ipv4 = true;
+        memset(&serv_addr4, 0, sizeof(serv_addr4)); // Zero out structure
+        serv_addr4.sin_family = AF_INET;
+        serv_addr4.sin_port = htons(PORT);   // Local port
 
-    const int mSocket =  socket(AF_INET, SOCK_STREAM, 0);
+        if(inet_pton(AF_INET, argv[1], &serv_addr4.sin_addr) < 0) {
+            DieWithUserMessage("ded", "Incorrect ip");
+        }
+
+        mSocket =  socket(AF_INET, SOCK_STREAM, 0);
+
+    } else {
+        memset(&serv_addr6, 0, sizeof(serv_addr6)); // Zero out structure
+        serv_addr6.sin6_family = AF_INET6;        // IPv6 address family
+        serv_addr6.sin6_port = htons(PORT);   // Local port
+
+        if(inet_pton(AF_INET6, argv[1], &serv_addr6.sin6_addr) < 0) {
+            DieWithUserMessage("ded", "Incorrect ip");
+        }
+
+        mSocket =  socket(AF_INET6, SOCK_STREAM, 0);
+    }
+
     if(mSocket < 0){
         DieWithUserMessage("ded", "creating master socket");
     }
@@ -132,8 +154,14 @@ int main(const int argc, const char **argv){
 
     setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
-    if(bind(mSocket, (struct sockaddr*) &addr, sizeof(addr)) <  0){
-        DieWithUserMessage("ded", "binding master socket");
+    if(is_ipv4) {
+        if (bind(mSocket, (struct sockaddr *) &serv_addr4, sizeof(serv_addr4)) < 0) {
+            DieWithUserMessage("ded", "binding master socket");
+        }
+    } else {
+        if (bind(mSocket, (struct sockaddr *) &serv_addr6, sizeof(serv_addr6)) < 0) {
+            DieWithUserMessage("ded", "binding master socket");
+        }
     }
 
     if(listen(mSocket, LISTEN) < 0){
