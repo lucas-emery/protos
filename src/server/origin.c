@@ -148,32 +148,6 @@ static void origin_done(struct selector_key* key) {
     register_stop(ORIGIN_ATTACHMENT(key)->client_fd);
 }
 
-static void origin_destroy(origin_t* o){
-    if(o != NULL) {
-        const int fds[] = {
-                o->infd,
-                o->outfd,
-        };
-        for(unsigned i = 0; i < N(fds); i++) {
-            if(fds[i] != -1) {
-                if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-                    abort();
-                }
-                close(fds[i]);
-            }
-        }
-
-        size_t size;
-        response_close(&o->parser);
-        free(o->response.headers);
-        free(o->response.mediaType);
-        buffer_reset(&o->buff);
-        uint8_t* data = buffer_write_ptr(&o->buff, &size);
-        free(data);
-        free(o);
-    }
-}
-
 static void origin_read(struct selector_key *key) {
     struct state_machine *stm   = &ORIGIN_ATTACHMENT(key)->stm;
     const origin_state_t st = stm_handler_read(stm, key);
@@ -205,7 +179,30 @@ static void origin_block(struct selector_key *key) {
 }
 
 static void origin_close(struct selector_key *key) {
-    origin_destroy(ORIGIN_ATTACHMENT(key));
+    origin_t * o = ORIGIN_ATTACHMENT(key);
+    if(o != NULL) {
+        const int fds[] = {
+                o->infd,
+                o->outfd,
+        };
+        for(unsigned i = 0; i < N(fds); i++) {
+            if(fds[i] != -1) {
+                if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
+                    abort();
+                }
+                close(fds[i]);
+            }
+        }
+
+        size_t size;
+        response_close(&o->parser);
+        free(o->response.headers);
+        free(o->response.mediaType);
+        buffer_reset(&o->buff);
+        uint8_t* data = buffer_write_ptr(&o->buff, &size);
+        free(data);
+        free(o);
+    }
 }
 
 static const struct fd_handler origin_handler = {

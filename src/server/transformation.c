@@ -70,10 +70,11 @@ typedef struct {
     buffer *b, *aux;
     struct state_machine stm;
     int client_fd;
+    enum type type;
 
     bool chunked;
     size_t content_length;
-    bool * transDone;
+    bool *respDone, *reqDone, *transDone;
 
     uint8_t  raw_data[BUFF_SIZE];
 
@@ -91,6 +92,9 @@ static char * state_to_string(const transform_state_t st){
 }
 
 static unsigned
+clear_w(struct selector_key *key);
+
+static unsigned
 copy_r(struct selector_key *key);
 
 static unsigned
@@ -105,8 +109,10 @@ static const struct state_definition transform_statbl[] = {
                 .on_read_ready    = copy_r,
         },{
                 .state            = DONE,
+                .on_write_ready   = clear_w,
         },{
                 .state            = ERROR,
+                .on_write_ready   = clear_w,
         }
 };
 
@@ -140,6 +146,7 @@ transform_t * transform_new(int client_fd){
 }
 
 static void transform_done(struct selector_key *key){
+    selector_set_interest_key(key, OP_NOOP);
 }
 
 static void transform_read(struct selector_key *key) {
@@ -165,7 +172,7 @@ static void transform_write(struct selector_key *key) {
 static void transform_close(struct selector_key *key) {
     transform_t * t = TRANSFORM_ATTACHMENT(key);
 
-    if(t->client_fd == -1) {
+    if(t->type == ORIGIN) {
         free(t->b);
     } else {
         free(t->aux);
@@ -198,6 +205,10 @@ transform_headers(struct response * response) {
         memcpy(end, chunked, length);
         response->header_length = (int)((void *)end - (void *)headers + length);
     }
+}
+
+static unsigned clear_w(struct selector_key *key) {
+    selector_remove_interest_key(key, OP_WRITE);
 }
 
 ssize_t max_chunk_length(size_t size) {
@@ -252,7 +263,10 @@ copy_r(struct selector_key *key) {
 
     n = read(key->fd, aux_ptr, (size_t)max_length);
     if(n < 0) {
+        *t->reqDone = true;
+        *t->respDone = true;
         *t->transDone = true;
+        selector_add_interest(key->s, t->client_fd, OP_WRITE);
         return ERROR;
     } else if(n == 0 && max_length != 0) {
         *t->transDone = true;
@@ -342,7 +356,10 @@ copy_w(struct selector_key *key) {
 
     n = write(key->fd, ptr, min);
     if(n == -1) {
+        *t->reqDone = true;
+        *t->respDone = true;
         *t->transDone = true;
+        selector_add_interest(key->s, t->client_fd, OP_WRITE);
         return ERROR;
     } else {
         buffer_read_adv(b, n);
@@ -504,12 +521,14 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
         fds[3] = out[R];
     }
 
-    transform_t * tIn = transform_new(-1);
+    transform_t * tIn = transform_new(o->client_fd);
     transform_t * tOut = transform_new(o->client_fd);
 
     if(tIn == NULL || tOut == NULL)
         return ERROR;
 
+    tIn->type = ORIGIN;
+    tOut->type = CLIENT;
 
     o->tb = malloc(sizeof(buffer));
     buffer_init(o->tb, BUFF_SIZE,o->raw_data);
@@ -524,6 +543,10 @@ init_transform(struct selector_key *key, bool chunked, size_t content_length) {
     o->infd = fds[2];
     o->outfd = fds[3];
 
+    tIn->reqDone = o->reqDone;
+    tOut->reqDone = o->reqDone;
+    tIn->respDone = o->respDone;
+    tOut->respDone = o->respDone;
     tIn->transDone = o->transDone;
     tOut->transDone = o->transDone;
 
