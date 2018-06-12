@@ -208,7 +208,9 @@ transform_headers(struct response * response) {
 }
 
 static unsigned clear_w(struct selector_key *key) {
+    transform_t * t = TRANSFORM_ATTACHMENT(key);
     selector_remove_interest_key(key, OP_WRITE);
+    return t->stm.current->state;
 }
 
 ssize_t max_chunk_length(size_t size) {

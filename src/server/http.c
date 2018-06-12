@@ -41,6 +41,10 @@ bool send_http_code_fd(unsigned code, fd_selector s, int fd, buffer * b, bool * 
             message = HTTP_409;
             lastResponse = true;
             break;
+        case 500:
+            message = HTTP_500;
+            lastResponse = true;
+            break;
         case 502:
             message = HTTP_502;
             lastResponse = true;

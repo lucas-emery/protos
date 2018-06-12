@@ -66,8 +66,6 @@ static unsigned copy_r(struct selector_key *key);
 
 static unsigned copy_w(struct selector_key *key);
 
-static void destroy(const unsigned state, struct selector_key *key);
-
 static char * state_to_string(const origin_state_t st){
     switch (st) {
         case CONNECTING:
@@ -361,11 +359,6 @@ finally:
     }
 
     d->status = status;
-}
-
-static void destroy(const unsigned state, struct selector_key *key){
-    origin_t * o = (origin_t*) key->data;
-    selector_notify_block(key->s, o->client_fd);
 }
 
 static unsigned
