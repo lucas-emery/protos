@@ -7,6 +7,8 @@
 
 typedef enum {
     TRAFFIC,
+    CONNECTIONS,
+    MAX_CONNECTIONS,
     CLIENTS,
     DNS,
     CONN,
@@ -22,5 +24,9 @@ int get_metric(metric_t type, uint8_t * buffer, size_t size);
 void startTimer(struct timeval * t);
 
 void logTime(metric_t type, struct timeval * t);
+
+void add_client();
+
+void remove_client();
 
 #endif

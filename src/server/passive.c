@@ -253,6 +253,8 @@ void socks_passive_accept(struct selector_key *key){
         goto fail;
     }
 
+    add_client();
+
     return;
 fail:
     if(client != -1) {
@@ -304,6 +306,7 @@ static void client_timeout(struct selector_key *key){
 static void client_done(struct selector_key* key) {
     log_request(CLIENT_ATTACHMENT(key)->client_fd);
     log_metric(CLIENTS, 1);
+    remove_client();
 
     const int fds[] = {
         CLIENT_ATTACHMENT(key)->client_fd,

@@ -86,9 +86,6 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 							case '2':
 							case '3':
 							case '4':
-							case '5':
-							case '6':
-							case '7':
 								if(!metrics[type-'0'-1]) {
 									if(pos + 2 >= MAX_BUFFER-PASSWORD_SIZE) {
 										printf("Too many arguments\n");

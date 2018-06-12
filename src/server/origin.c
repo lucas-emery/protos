@@ -146,22 +146,7 @@ static origin_t * origin_new(int origin_fd, int client_fd) {
 
 static void origin_done(struct selector_key* key) {
     register_stop(ORIGIN_ATTACHMENT(key)->client_fd);
-    /*const int fds[] = {
-        ORIGIN_ATTACHMENT(key)->client_fd,
-        ORIGIN_ATTACHMENT(key)->origin_fd,
-    };
-    for(unsigned i = 0; i < N(fds); i++) {
-        if(fds[i] != -1) {
-            if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-                abort();
-            }
-            table[key->fd].type = NONE;
-            strcpy(table[key->fd].state, "");
-            close(fds[i]);
-        }
-    }*/
 }
-
 
 static void origin_destroy(origin_t* o){
     if(o != NULL) {
@@ -339,6 +324,8 @@ void request_connect(struct selector_key *key, request_st *d) {
                 goto finally;
             }
 
+            startTimer(&o->time);
+
             register_origin_addr(CLIENT_ATTACHMENT(key)->client_fd, &CLIENT_ATTACHMENT(key)->origin_addr);
             o->respDone = s->respDone;
             o->reqDone = s->reqDone;
@@ -351,8 +338,6 @@ void request_connect(struct selector_key *key, request_st *d) {
             goto finally;
         }
     } else {
-        // estamos conectados sin esperar... no parece posible
-        // saltaríamos directamente a COPY
         error = true;
         goto finally;
     }
