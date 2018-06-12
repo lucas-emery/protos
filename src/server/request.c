@@ -1,5 +1,6 @@
 #include "request.h"
 #include <errno.h>
+#include <origin.h>
 #include "utils.h"
 
 static enum request_state
@@ -31,8 +32,8 @@ request_parser_init (struct request_parser *p) {
     p->state = request_method;
     memset(p->request, 0, sizeof(*(p->request)));
     p->request->method = GET;                       //initialized so 405 doesn't trigger accidentally
-    p->request->host = calloc(1, BUFF_SIZE);
-    p->buffer = calloc(1, BUFF_SIZE);
+    p->request->host = calloc(1, SMALLER_BUFF_SIZE);
+    p->buffer = calloc(1, SMALLER_BUFF_SIZE);
     p->request->headers = calloc(1, BUFF_SIZE);
     p->i = 0;
 }
@@ -72,7 +73,7 @@ request_close(struct request_parser *p) {
 static void
 request_reset_buffer(struct request_parser* p) {
     p->i = 0;
-    bzero(p->buffer, BUFF_SIZE);
+    bzero(p->buffer, SMALLER_BUFF_SIZE);
 }
 
 request_state_t
@@ -221,6 +222,9 @@ content_length(const uint8_t c, struct request_parser* p) {
 static enum request_state
 host(const uint8_t c, struct request_parser* p) {
     enum request_state next = request_host;
+
+    if(p->i > SMALLER_BUFF_SIZE)
+        return request_error;
 
     if(c == '\r') {
         p->request->host[p->i] = 0;

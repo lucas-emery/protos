@@ -63,7 +63,6 @@ struct request_parser {
    uint16_t i;
    /**buffer auxiliar*/
    char* buffer;
-   char * host;
 };
 
 /*
