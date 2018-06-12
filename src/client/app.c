@@ -1,12 +1,13 @@
 #include "app.h"
 
+static char mediatypes[20][1024];
+
 int main(int argc, char const *argv[]) {
 	int cantParams = argc-1;
 	int sock, port;
 	ssize_t in, ret;
 	struct sockaddr_in servaddr;
 	char buffer[MAX_BUFFER], bufferAux[MAX_BUFFER], bufferRta[MAX_BUFFER], password[PASSWORD_SIZE + 1], ip[100];
-
 	bzero(bufferAux, MAX_BUFFER);
 	if(getParams(argc, argv, bufferAux, ip, &port) == 1) {
 		return 1;
@@ -63,7 +64,9 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 	int ip1, ip2, ip3, ip4;
 	int metrics[7] = {0};
 	int configurations[4] = {0};
+	int mediaTypePos = 0;
 	char type;
+	int j, k;
 
 	if(sscanf(params[1], "%d.%d.%d.%d:%d", &ip1, &ip2, &ip3, &ip4, port) == 5) {
 		sprintf(ip, "%d.%d.%d.%d", ip1, ip2, ip3, ip4);
@@ -87,6 +90,10 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 							case '6':
 							case '7':
 								if(!metrics[type-'0'-1]) {
+									if(pos + 2 >= MAX_BUFFER-PASSWORD_SIZE) {
+										printf("Too many arguments\n");
+										return 1;
+									}
 									buffer[pos++] = '0';
 									buffer[pos++] = type;
 									metrics[type-'0'-1] = 1;
@@ -123,9 +130,32 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 											pos += strlen(params[i]);
 											buffer[pos++] = ' ';
 											configurations[type-'0'] = 1;
+                                            for(k=0; k < mediaTypePos; k++) {
+                                                if(strcmp(mediatypes[j], params[i]) == 0) {
+                                                    break;
+                                                }
+                                            }
+                                            if(k == mediaTypePos) {
+                                                strcpy(mediatypes[mediaTypePos++], params[i]);
+                                            }
 										} else {
-											printf("Repeated argument\n");
-											return 1;
+                                            for(j=0; j < mediaTypePos; j++) {
+                                                if(strcmp(mediatypes[j], params[i]) == 0) {
+                                                    printf("Repeated argument\n");
+                                                    return 1;
+                                                }
+                                            }
+                                            buffer[pos++] = '1';
+                                            buffer[pos++] = type;
+                                            buffer[pos] = 0;
+                                            if(pos + strlen(params[i]) >= MAX_BUFFER-PASSWORD_SIZE) {
+                                                printf("Media type is too long\n");
+                                                return 1;
+                                            }
+                                            strcat(buffer, params[i]);
+                                            pos += strlen(params[i]);
+                                            buffer[pos++] = ' ';
+                                            strcpy(mediatypes[mediaTypePos++], params[i]);
 										}
 									} else {
 										printf("Invalid media type\n");
@@ -156,6 +186,12 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 			return 1;
 		}
 	}
+
+	for(int l = 0; l < mediaTypePos; l++){
+	    printf("%s\n", mediatypes[l]);
+	}
+
+	printf("%d\n", pos);
 	return 0;
 }
 
@@ -191,7 +227,8 @@ int isMediaType(const char * param) {
 
 void parseResponse(char * buffer, size_t n) {
 	int j = 0;
-	//printf("%s\n", buffer);
+	int mediatypePos = 0;
+    //printf("%s\n", buffer)
 	while(j < n) {
 		switch(buffer[j++]) {
 			case '0':
@@ -207,10 +244,10 @@ void parseResponse(char * buffer, size_t n) {
 			break;
 			case '1':
 				if(buffer[j] == '0') {
-					printf("Configurations reseted\n");
+					printf("Configurations reseted for %s\n", mediatypes[mediatypePos++]);
 					j++;
 				} else {
-					printf("Configuration %c applied\n", buffer[j++]);
+					printf("Configuration %c applied for %s\n", buffer[j++], mediatypes[mediatypePos++]);
 				}	
 			break;
 			case '2':
