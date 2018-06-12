@@ -168,11 +168,11 @@ int main(const int argc, const char **argv){
     bool is_ipv4 = false;
 
     char buff[INET_ADDRSTRLEN];
-    if(inet_pton(AF_INET, ip_tcp, buff) > 0) { //is ipv4
+    if(ip_tcp[0] == 0 || inet_pton(AF_INET, ip_tcp, buff) > 0) { //is ipv4
         is_ipv4 = true;
         memset(&serv_addr4, 0, sizeof(serv_addr4)); // Zero out structure
         serv_addr4.sin_family = AF_INET;
-        serv_addr4.sin_port = htons(PORT);   // Local port
+        serv_addr4.sin_port = htons(port_tcp);   // Local port
 
         if(ip_tcp[0] == 0)
             serv_addr4.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -184,16 +184,12 @@ int main(const int argc, const char **argv){
         mSocket =  socket(AF_INET, SOCK_STREAM, 0);
 
     } else {
-        memset(&serv_addr6, 0, sizeof(serv_addr6)); // Zero out structure
-        serv_addr6.sin6_family = AF_INET6;        // IPv6 address family
-        serv_addr6.sin6_port = htons(PORT);   // Local port
+        memset(&serv_addr6, 0, sizeof(serv_addr6));
+        serv_addr6.sin6_family = AF_INET6;
+        serv_addr6.sin6_port = htons(port_tcp);
 
-        if(ip_tcp[0] == 0)
-            serv_addr6.sin6_addr = in6addr_any;
-        else {
-            if (inet_pton(AF_INET6, ip_tcp, &serv_addr6.sin6_addr) < 0)
-                DieWithUserMessage("ded", "Incorrect ip");
-        }
+        if (inet_pton(AF_INET6, ip_tcp, &serv_addr6.sin6_addr) < 0)
+            DieWithUserMessage("ded", "Incorrect ip");
 
         mSocket =  socket(AF_INET6, SOCK_STREAM, 0);
     }
@@ -207,7 +203,7 @@ int main(const int argc, const char **argv){
         pthread_create(&t, NULL, print_table, NULL);
     #endif
 
-    printf("Listening on TCP port %d\n", PORT);
+    printf("Listening on TCP port %d\n", port_tcp);
 
     setsockopt(mSocket, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 

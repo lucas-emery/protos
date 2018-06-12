@@ -2,6 +2,7 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #include "log.h"
 
 #define REQUEST_LENGTH 43
@@ -55,10 +56,10 @@ add_entry(struct sockaddr_storage* origin_addr, struct sockaddr_storage* client_
 
     sprintf(str1, "%d", status_code);
 
-    inet_ntop(client_addr->ss_family, &(((struct sockaddr_in *)client_addr)->sin_addr),
-            ip_client_buff, INET6_ADDRSTRLEN);
-    inet_ntop(origin_addr->ss_family, &(((struct sockaddr_in *)origin_addr)->sin_addr),
-            ip_origin_buff, INET6_ADDRSTRLEN);
+    if(inet_ntop(client_addr->ss_family, &(((struct sockaddr_in *)client_addr)->sin_addr),
+            ip_client_buff, INET6_ADDRSTRLEN) <= 0);
+    if(inet_ntop(origin_addr->ss_family, &(((struct sockaddr_in *)origin_addr)->sin_addr),
+                 ip_origin_buff, INET6_ADDRSTRLEN) <= 0);
 
     fprintf(file, "%-20s%-20s%-15lu%-50s%-10s\n", ip_client_buff, ip_origin_buff,
             duration, request, str1);

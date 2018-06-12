@@ -68,7 +68,4 @@ void socks_passive_accept(struct selector_key *key);
 /** libera pools internos */
 void sock_pool_destroy(void);
 
-void
-local_ip_resolv();
-
 #endif //PC_2018_07_PASSIVE_H
