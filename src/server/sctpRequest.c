@@ -34,7 +34,7 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    ssize_t n = send(key->fd, (void *) d->write_buffer, strlen(d->write_buffer), MSG_NOSIGNAL);
+    ssize_t n = send(key->fd, (void *) d->write_buffer, strlen((char*)d->write_buffer), MSG_NOSIGNAL);
     if(n == -1) {
         return SCTP_ERROR;
     }

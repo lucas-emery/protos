@@ -63,6 +63,7 @@ add_entry(struct sockaddr_storage* origin_addr, struct sockaddr_storage* client_
 
     fprintf(file, "%-20s%-20s%-15lu%-50s%-10s\n", ip_client_buff, ip_origin_buff,
             duration, request, str1);
+    fflush(file);
 }
 
 void
