@@ -190,14 +190,14 @@ transform_headers(struct response * response) {
     }
 }
 
-size_t max_chunk_length(size_t size) {
+ssize_t max_chunk_length(size_t size) {
     size_t metadata_length = 5;     // \r\n\r\n
     size_t aux = size;
     do {
         metadata_length++;
         aux /= 16;
     } while(aux != 0);
-    return size < metadata_length ? 0 : size - metadata_length;
+    return size - metadata_length;
 }
 
 char * size_to_hexstring(size_t size) {
@@ -219,8 +219,8 @@ copy_r(struct selector_key *key) {
     transform_t * t = (transform_t*) key->data;
     buffer * b = t->b;
     buffer * aux = t->aux;
-    ssize_t n;
-    size_t size, aux_size, min, length, max_length;
+    ssize_t n, max_length;
+    size_t size, aux_size, min, length;
     char * hexstring;
 
     if(t->timing) {
@@ -235,7 +235,11 @@ copy_r(struct selector_key *key) {
 
     max_length = max_chunk_length(min);
 
-    n = read(key->fd, aux_ptr, max_length);
+    if(max_length <= 0) {
+        return COPY;
+    }
+
+    n = read(key->fd, aux_ptr, (size_t)max_length);
     if(n < 0) {
         return ERROR;
     } else if(n == 0 && max_length != 0) {
