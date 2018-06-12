@@ -35,8 +35,8 @@ static exe_t exe_array[] = {
             .exec   = ECHO_EXE,
             .params = NULL,
         },{
-            .type   = ECHODEBUG,
-            .exec   = ECHODEBUG_EXE,
+            .type   = DUPLICATE,
+            .exec   = DUPLICATE_EXE,
             .params = NULL,
         },{
             .type   = LEET,
