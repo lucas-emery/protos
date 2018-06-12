@@ -185,10 +185,9 @@ static void origin_close(struct selector_key *key) {
         };
         for(unsigned i = 0; i < N(fds); i++) {
             if(fds[i] != -1) {
-                if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-                    abort();
+                if(SELECTOR_SUCCESS == selector_unregister_fd(key->s, fds[i])) {
+                    close(fds[i]);
                 }
-                close(fds[i]);
             }
         }
 
