@@ -89,13 +89,13 @@ static const struct state_definition origin_statbl[] = {
         .on_write_ready   = connected,
     },{
         .state            = HEADERS,
-        .on_arrival       = headers_init,              //TODO
-        .on_read_ready    = headers_read,              //TODO
+        .on_write_ready   = copy_w,
+        .on_arrival       = headers_init,
+        .on_read_ready    = headers_read,
         .on_departure     = headers_flush
     },{
         .on_read_ready    = transform,
         .state            = TRANSFORM,
-    //    .on_block_ready   = response_transform_done,    //TODO
     },{
         .on_write_ready   = copy_w,
         .on_read_ready    = copy_r,
@@ -228,7 +228,8 @@ static unsigned connected(struct selector_key *key){
     if (getsockopt(key->fd, SOL_SOCKET, SO_ERROR, &error, &len) >= 0) {
         if(error == 0) {
             logTime(CONN, &ORIGIN_ATTACHMENT(key)->time);
-            return COPY;
+            selector_add_interest(key->s, key->fd, OP_READ);
+            return HEADERS;
         }
     }
 
@@ -242,7 +243,6 @@ static unsigned connected(struct selector_key *key){
 }
 
 static void headers_init(const unsigned state, struct selector_key *key) {
-    selector_set_interest(key->s,key->fd, OP_READ);
     origin_t * o = (origin_t*) key->data;
     o->parser.response = &o->response;
     response_parser_init(&o->parser);
@@ -252,27 +252,29 @@ static void headers_init(const unsigned state, struct selector_key *key) {
 
 static unsigned headers_read(struct selector_key *key){
     origin_t * o = (origin_t*) key->data;
-    size_t size = BUFF_SIZE;
+    size_t size;
     uint8_t * ptr = buffer_write_ptr(&o->buff, &size);
-    ssize_t read = recv(o->origin_fd, ptr, size, 0);
-
+    ssize_t n;
     bool error;
 
-    if(read > 0){
-        buffer_write_adv(&o->buff, read);
-        int s = response_consume(&o->buff, &o->parser, &error);
+    n = recv(o->origin_fd, ptr, size, 0);
+    if(n > 0){
+        buffer_write_adv(&o->buff, n);
+        enum response_state s = response_consume(&o->buff, &o->parser, &error);
         if(response_is_done(s, 0)) {
             register_status_code(o->client_fd, o->response.status_code);
             bool transform = is_active(o->response.mediaType);
             if (transform && !o->response.compressed) {
                 transform_headers(&o->response);
                 init_transform(key, o->response.chunked, o->response.body_length);
-                selector_remove_interest(key->s, key->fd, OP_WRITE);
-                return COPY;
+            } else {
+                *o->transDone = true;
             }
-            *o->transDone = true;
             return COPY;
         }
+    } else {
+        //todo close client
+        return RESPONSE_ERROR;
     }
     return HEADERS;
 }
@@ -290,10 +292,12 @@ static void headers_flush(const unsigned state, struct selector_key *key){
             ptr[i] = o->response.headers[i];
         }
 //        strcpy((char*)(ptr + o->response.header_length - 2), "Proxy-Connection: Close\r\n\r\n");
+        buffer_write_adv(b, o->response.header_length );
+    } else {
+        //todo suicide
     }
-    buffer_write_adv(b, o->response.header_length );
 
-    selector_set_interest(key->s, o->client_fd, OP_WRITE);
+    selector_add_interest(key->s, o->client_fd, OP_WRITE);
     selector_remove_interest(key->s, o->origin_fd, OP_READ);
     selector_notify_block(key->s, o->origin_fd);
 
@@ -391,17 +395,15 @@ flush_body(struct selector_key *key) {
     }
 
     if(o->infd == -1 || o->outfd == -1) {
-        selector_remove_interest(key->s, o->infd, OP_WRITE);
         selector_add_interest(key->s, o->client_fd, OP_WRITE);
     }else{
-        selector_remove_interest(key->s,o->client_fd, OP_WRITE);
         selector_add_interest(key->s, o->infd, OP_WRITE);
     }
 
     if(o->response.chunked){
         *o->respDone = chunked_is_done(ptr, min);
     } else {
-        *o->respDone = body_is_done(&o->parser, min); //TODO check length status
+        *o->respDone = body_is_done(&o->parser, min);
     }
 
     return COPY;
@@ -427,22 +429,17 @@ copy_r(struct selector_key *key) {
         buffer_write_adv(b, n);
     }
     if(o->infd == -1 || o->outfd == -1) {
-        selector_remove_interest(key->s, o->infd, OP_WRITE);
         selector_add_interest(key->s, o->client_fd, OP_WRITE);
     }else{
-        selector_remove_interest(key->s,o->client_fd,OP_WRITE);
         selector_add_interest(key->s, o->infd, OP_WRITE);
-        selector_add_interest(key->s, o->outfd, OP_READ);
     }
-
-    bool done = false;
 
     if(o->response.chunked){
-        done = chunked_is_done(ptr, n);
+        *o->respDone = chunked_is_done(ptr, n);
     } else {
-        done = body_is_done(&o->parser, n);
+        *o->respDone = body_is_done(&o->parser, n);
     }
-    *o->respDone = done;
+
     return COPY;
 }
 
@@ -457,7 +454,7 @@ copy_w(struct selector_key *key) {
     uint8_t *ptr = buffer_read_ptr(b, &size);
     if(size == 0) {
         selector_remove_interest(key->s, key->fd, OP_WRITE);
-        return COPY;
+        return o->stm.current->state;
     }
 
     n = send(key->fd, ptr, size, MSG_NOSIGNAL);
@@ -468,14 +465,7 @@ copy_w(struct selector_key *key) {
         buffer_read_adv(b, n);
     }
 
-    if(*o->reqDone && !*o->respDone){
-        return HEADERS;
-    }
-
-    if(*o->respDone && *o->reqDone)
-        return RESPONSE_DONE;
-
-    return COPY;
+    return o->stm.current->state;
 }
 
 

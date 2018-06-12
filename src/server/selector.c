@@ -548,7 +548,7 @@ handle_iteration(fd_selector s) {
                     }
                 }
             }
-            if(now.tv_sec - item->last_used.tv_sec >= TIMEOUT) {
+            if(ITEM_USED(item) && now.tv_sec - item->last_used.tv_sec >= TIMEOUT) {
                 if(item->handler->handle_timeout != NULL)
                     item->handler->handle_timeout(&key);
             }
