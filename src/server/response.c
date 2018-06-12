@@ -160,8 +160,13 @@ enter(const uint8_t c, struct response_parser* p) {
     switch(c){
         case '\n':
             p->buffer[p->i++] = c;
-            if(strcmp(p->buffer, "\r\n\r\n") == 0)
-                next = response_done;
+            if(strcmp(p->buffer, "\r\n\r\n") == 0) {
+                if (p->response->status_code == 100) {
+                    next = response_version;
+                } else {
+                    next = response_done;
+                }
+            }
         break;
         case '\r':
             p->buffer[p->i++] = c;
