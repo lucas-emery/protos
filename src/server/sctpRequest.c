@@ -34,7 +34,7 @@ static void sctp_request_read_close(const unsigned state, struct selector_key *k
 static unsigned sctp_request_write(struct selector_key *key) {
     sctp_request_st * d = &CLIENT_ATTACHMENT(key)->client.request;
 
-    ssize_t n = send(key->fd, (void *) d->write_buffer, (size_t) MAX_BUFFER_SIZE, MSG_NOSIGNAL);
+    ssize_t n = send(key->fd, (void *) d->write_buffer, strlen(d->write_buffer), MSG_NOSIGNAL);
     if(n == -1) {
         return SCTP_ERROR;
     }
@@ -200,7 +200,7 @@ void sctp_request_parser(uint8_t * read_buffer, uint8_t * write_buffer, int n) {
 				    write_buffer[write_pos++] = METRIC;
 					write_buffer[write_pos++] = type;
 					write_buffer[write_pos] = 0;
-					strcat((char*)write_buffer, (char*)metric);
+					strncat((char*)write_buffer, (char*)metric, METRIC_SIZE);
                     write_pos += METRIC_SIZE;
 				}
 				else {
