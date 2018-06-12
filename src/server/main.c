@@ -104,8 +104,59 @@ static void sigterm_handler(const int signal){
 //    fprintf(stdout, "%s\tstatus=%d\n", cbuff, status);
 //}
 
+int get_params(const int argc, const char ** argv, char * ip_tcp, char * ip_sctp, int * port_tcp, int * port_sctp) {
+    int i;
+    char type;
+    for(i=1; i<argc; i++) {
+        if(argv[i][0] == '-') {
+            type = argv[i++][1];
+            if(i < argc) {
+                switch(type) {
+                    case 'p':
+                        if(sscanf(argv[i], "%d", port_tcp) != 1) {
+                            return 0;
+                        }
+                        break;
+                    case 'P':
+                        if(sscanf(argv[i], "%d", port_sctp) != 1) {
+                            return 0;
+                        }
+                        break;
+                    case 'l':
+                        if(sscanf(argv[i], "%s", ip_tcp) != 1) {
+                            return 0;
+                        }
+                        break;
+                    case 'L':
+                        if(sscanf(argv[i], "%s", ip_sctp) != 1) {
+                            return 0;
+                        }
+                        break;
+                    default:
+                        return 0;
+                }
+            } else {
+                return 0;
+            }
+
+        } else {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 int main(const int argc, const char **argv){
-    local_ip_resolv(PORT);
+    char ip_tcp[100] = {0}, ip_sctp[100] = {0};
+    int port_tcp = PORT, port_sctp = SCTP_PORT;
+
+    if(!get_params(argc, argv, ip_tcp, ip_sctp, &port_tcp, &port_sctp)) {
+        printf("Invalid argument\n");
+        return 1;
+    }
+
+    local_ip_resolv(port_tcp);
 
     close(0);
 
@@ -117,7 +168,7 @@ int main(const int argc, const char **argv){
     bool is_ipv4 = false;
 
     char buff[INET_ADDRSTRLEN];
-    if(inet_pton(AF_INET, argv[1], buff) > 0) { //is ipv4
+    if(inet_pton(AF_INET, ip_tcp, buff) > 0) { //is ipv4
         is_ipv4 = true;
         memset(&serv_addr4, 0, sizeof(serv_addr4)); // Zero out structure
         serv_addr4.sin_family = AF_INET;
@@ -209,8 +260,12 @@ int main(const int argc, const char **argv){
     struct sockaddr_in sctp_addr;
     memset(&sctp_addr, 0, sizeof(sctp_addr)); 
     sctp_addr.sin_family = AF_INET;
-    sctp_addr.sin_addr.s_addr = htonl (INADDR_ANY);
-    sctp_addr.sin_port = htons (SCTP_PORT);
+    sctp_addr.sin_port = htons(port_sctp);
+    if(strlen(ip_sctp) == 0) {
+        sctp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    } else {
+        inet_ntop(AF_INET, &sctp_addr.sin_addr.s_addr, ip_sctp, strlen(ip_sctp));
+    }
 
     if(bind(sctp_socket, (struct sockaddr *)&sctp_addr, sizeof(sctp_addr)) < 0) {
         DieWithUserMessage("ded", "binding sctp socket");
