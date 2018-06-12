@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include "app.h"
 
 static char mediatypes[20][1024];
@@ -27,10 +28,30 @@ int main(int argc, char const *argv[]) {
 	servaddr.sin_port = htons(port);
 	servaddr.sin_addr.s_addr = inet_addr(ip);
 
+	int status = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) | O_NONBLOCK);
+
 	ret = connect(sock, (struct sockaddr *) &servaddr, sizeof (servaddr));
 
-	if (ret < 0)
-	  DieWithSystemMessage("connect() failed");
+	fd_set fdset;
+	struct timeval tv;
+
+	FD_ZERO(&fdset);
+	FD_SET(sock, &fdset);
+	tv.tv_sec = 5;             /* 10 second timeout */
+	tv.tv_usec = 0;
+
+	if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1)
+	{
+		int so_error;
+		socklen_t len = sizeof so_error;
+		getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+		if (so_error == 0) {
+		} else {
+			DieWithUserMessage("ded", "connection timeout");
+		}
+	}
+
+	status = fcntl(sock, F_SETFL, fcntl(sock, F_GETFL, 0) & ~O_NONBLOCK);
 
 	bzero(buffer, MAX_BUFFER);
 	strcpy(buffer, password);
