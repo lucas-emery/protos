@@ -1,6 +1,7 @@
 
 *
 *.o
+!*.pdf
 !/bin/
 !.gitignore
 !/src/
