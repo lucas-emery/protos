@@ -11,13 +11,13 @@
 
 #define TOUPPER_EXE "bin/toUpper/toUpper"
 #define ECHO_EXE "bin/echo/echo"
-#define ECHODEBUG_EXE "bin/echoDebug/echoDebug"
+#define DUPLICATE_EXE "bin/duplicate/duplicate"
 #define LEET_EXE "sed"
 
 typedef enum transformation_type {
     TOUPPER,
     ECHO,
-    ECHODEBUG,
+    DUPLICATE,
     LEET,
 } transformation_type_t;
 

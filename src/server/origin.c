@@ -185,10 +185,9 @@ static void origin_close(struct selector_key *key) {
         };
         for(unsigned i = 0; i < N(fds); i++) {
             if(fds[i] != -1) {
-                if(SELECTOR_SUCCESS != selector_unregister_fd(key->s, fds[i])) {
-                    abort();
+                if(SELECTOR_SUCCESS == selector_unregister_fd(key->s, fds[i])) {
+                    close(fds[i]);
                 }
-                close(fds[i]);
             }
         }
 
@@ -278,16 +277,12 @@ static void headers_flush(const unsigned state, struct selector_key *key){
     size_t size;
     uint8_t *ptr = buffer_write_ptr(b, &size);
 
-//    size_t aux = strlen("Proxy-Connection: Close") + 2;
 
     if(size > o->response.header_length){
         for (size_t i = 0; i < o->response.header_length; i++) {
             ptr[i] = o->response.headers[i];
         }
-//        strcpy((char*)(ptr + o->response.header_length - 2), "Proxy-Connection: Close\r\n\r\n");
         buffer_write_adv(b, o->response.header_length );
-    } else {
-        //todo suicide
     }
 
     selector_add_interest(key->s, o->client_fd, OP_WRITE);

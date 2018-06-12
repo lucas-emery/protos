@@ -35,8 +35,8 @@ static exe_t exe_array[] = {
             .exec   = ECHO_EXE,
             .params = NULL,
         },{
-            .type   = ECHODEBUG,
-            .exec   = ECHODEBUG_EXE,
+            .type   = DUPLICATE,
+            .exec   = DUPLICATE_EXE,
             .params = NULL,
         },{
             .type   = LEET,
@@ -146,7 +146,8 @@ transform_t * transform_new(int client_fd){
 }
 
 static void transform_done(struct selector_key *key){
-    selector_set_interest_key(key, OP_NOOP);
+    selector_unregister_fd(key->s, key->fd);
+    close(key->fd);
 }
 
 static void transform_read(struct selector_key *key) {

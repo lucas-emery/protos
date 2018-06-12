@@ -10,11 +10,11 @@ OBJS=$(SRCS:.c=.o)
 default: all
 
 all:	$(OBJS)
-	$(CC) -o echoDebug $^ $(CFLAGS)
+	$(CC) -o duplicate $^ $(CFLAGS)
 	rm *.o
 
 .PHONY: clean
 
 clean:
 	rm -f *.o
-	rm echoDebug
+	rm duplicate

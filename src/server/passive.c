@@ -343,22 +343,6 @@ request_init(const unsigned state, struct selector_key *key) {
 
 }
 
-//void
-//transform_request_headers(struct request request) {
-//    int i, header_length = request.headers_length;
-//    char * headers = (char *)request.headers;
-//
-//    char * expect_header = strcasestr(headers, "Expect");
-//
-//    if(expect_header != NULL) {
-//        for (i = 0; expect_header[i] != '\n' ; i++);
-//        i++;
-//
-//        memmove(expect_header, &expect_header[i], (size_t)header_length);
-//        request.headers_length -= i;
-//    }
-//}
-
 static unsigned
 request_read(struct selector_key *key) {
     client_t * c = CLIENT_ATTACHMENT(key);
@@ -386,7 +370,6 @@ request_read(struct selector_key *key) {
         request_state_t st = request_consume(aux, &d->parser, &error);
         register_request(c->client_fd, d->request.headers);
         if(request_is_done( &d->parser, st, 0)) {
-//            transform_request_headers(c->client.request.request);
             register_request(c->client_fd, d->request.headers);
             if(d->parser.request->method == UNSUPPORTED) {
                 register_status_code(c->client_fd, 405);
@@ -447,7 +430,6 @@ request_resolv(struct selector_key * key, request_st * d) {
 
     startTimer(&CLIENT_ATTACHMENT(key)->time);
 
-    //TODO analize error handling. Subbing fro WRITE??
     struct selector_key* k = malloc(sizeof(*key));
     if(k == NULL) {
         d->status = status_general_SOCKS_server_failure;
@@ -507,7 +489,6 @@ request_read_done(struct selector_key *key) {\
 
 static unsigned
 destroy(struct selector_key *key){
-//    client_t * c = CLIENT_ATTACHMENT(key);
     return DONE;
 }
 
