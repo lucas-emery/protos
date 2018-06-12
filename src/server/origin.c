@@ -416,7 +416,11 @@ copy_r(struct selector_key *key) {
 
     uint8_t * ptr= buffer_write_ptr(b, &size);
     n = recv(key->fd, ptr, size, 0);
-    if(n < 0 || (n == 0 && size != 0 && *o->transDone)) {
+    if(n < 0 || (n == 0 && size != 0)) {
+        *o->reqDone = true;
+        *o->respDone = true;
+        *o->transDone = true;
+        selector_add_interest(key->s, o->client_fd, OP_WRITE);
         return RESPONSE_ERROR;
     } else {
         log_metric(TRAFFIC, n);
