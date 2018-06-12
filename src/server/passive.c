@@ -301,7 +301,7 @@ static void client_close(struct selector_key *key) {
 }
 
 static void client_timeout(struct selector_key *key){
-
+    send_http_code_from_client(504, key);
 }
 
 static void client_done(struct selector_key* key) {

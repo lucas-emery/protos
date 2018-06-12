@@ -15,6 +15,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/signal.h>
+#include <lib.h>
 #include "selector.h"
 
 #define N(x) (sizeof(x)/sizeof((x)[0]))
@@ -525,12 +526,6 @@ handle_iteration(fd_selector s) {
         struct item *item = s->fds + i;
 
         if(ITEM_USED(item)) {
-
-            if(now.tv_sec - item->last_used.tv_sec >= 30){
-                if(item->handler->handle_timeout != NULL)
-                    item->handler->handle_timeout(item);
-            }
-
             key.fd   = item->fd;
             key.data = item->data;
             if(FD_ISSET(item->fd, &s->slave_r)) {
@@ -552,6 +547,10 @@ handle_iteration(fd_selector s) {
                         item->handler->handle_write(&key);
                     }
                 }
+            }
+            if(now.tv_sec - item->last_used.tv_sec >= TIMEOUT) {
+                if(item->handler->handle_timeout != NULL)
+                    item->handler->handle_timeout(&key);
             }
         }
     }
