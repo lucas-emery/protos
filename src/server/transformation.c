@@ -236,6 +236,7 @@ copy_r(struct selector_key *key) {
     max_length = max_chunk_length(min);
 
     if(max_length <= 0) {
+        selector_add_interest(key->s, t->client_fd, OP_WRITE);
         return COPY;
     }
 
