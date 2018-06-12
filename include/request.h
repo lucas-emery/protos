@@ -37,6 +37,7 @@ typedef enum {
     POST,
     HEAD,
     DELETE,
+    PUT,
     UNSUPPORTED
 } method_t;
 

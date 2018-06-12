@@ -126,6 +126,8 @@ method(const uint8_t c, struct request_parser* p) {
             p->request->method = HEAD;
         } else if(strcmp(p->buffer, "DELETE") == 0) {
             p->request->method = DELETE;
+        } else if(strcmp(p->buffer, "PUT") == 0) {
+            p->request->method = PUT;
         } else {
             p->request->method = UNSUPPORTED;
         }

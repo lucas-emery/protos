@@ -24,6 +24,7 @@ struct response {
     int header_length;
     int body_length;
     int status_code;
+    bool compressed;
 };
 
 enum response_state{

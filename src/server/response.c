@@ -74,6 +74,7 @@ response_parser_init (struct response_parser *p) {
     memset(p->response, 0, sizeof(*(p->response)));
     p->response->mediaType = calloc(1, SMALLER_BUFF_SIZE);
     p->response->chunked = FALSE;
+    p->response->compressed = false;
     p->response->headers = calloc(1, BUFF_SIZE);
     p->response->header_length = 0;
     p->response->body_length = 0;
@@ -192,6 +193,8 @@ desiredHeader(const uint8_t c, struct response_parser* p) {
             next = response_media_type;
         else if(strcmp(p->buffer, "transfer-encoding") == 0)
             next = response_encoding;
+        else if(strcmp(p->buffer, "content-encoding") == 0)
+            next = response_encoding;
         else
             next = response_headers;
 
@@ -245,6 +248,9 @@ encoding(const uint8_t c, struct response_parser* p) {
 
         if(strstr(p->buffer, "chunked") != NULL)
             p->response->chunked = TRUE;
+        else if(strstr(p->buffer, "compress") != NULL || strstr(p->buffer, "gzip") != NULL ||
+                strstr(p->buffer, "deflate") != NULL)
+            p->response->compressed = true;
 
         response_reset_buffer(p);
         p->buffer[p->i++] = c;
