@@ -187,11 +187,6 @@ int getParams(int cantParams, char const *params[], char buffer[], char * ip, in
 		}
 	}
 
-	for(int l = 0; l < mediaTypePos; l++){
-	    printf("%s\n", mediatypes[l]);
-	}
-
-	printf("%d\n", pos);
 	return 0;
 }
 
