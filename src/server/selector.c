@@ -525,7 +525,7 @@ handle_iteration(fd_selector s) {
         struct item *item = s->fds + i;
 
         if(ITEM_USED(item)) {
-            
+
             if(now.tv_sec - item->last_used.tv_sec >= 30){
                 if(item->handler->handle_timeout != NULL)
                     item->handler->handle_timeout(item);
@@ -534,9 +534,8 @@ handle_iteration(fd_selector s) {
             key.fd   = item->fd;
             key.data = item->data;
             if(FD_ISSET(item->fd, &s->slave_r)) {
-
-                gettimeofday(&item->last_used, NULL);
                 if(OP_READ & item->interest) {
+                    item->last_used.tv_sec = now.tv_sec;
                     if(0 == item->handler->handle_read) {
                         assert(("OP_READ arrived but no handler. bug!" == 0));
                     } else {
@@ -545,9 +544,8 @@ handle_iteration(fd_selector s) {
                 }
             }
             if(FD_ISSET(i, &s->slave_w)) {
-
-                gettimeofday(&item->last_used, NULL);
                 if(OP_WRITE & item->interest) {
+                    item->last_used.tv_sec = now.tv_sec;
                     if(0 == item->handler->handle_write) {
                         assert(("OP_WRITE arrived but no handler. bug!" == 0));
                     } else {
